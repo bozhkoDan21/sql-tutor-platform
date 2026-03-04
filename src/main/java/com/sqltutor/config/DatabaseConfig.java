@@ -2,7 +2,7 @@ package com.sqltutor.config;
 
 import java.io.InputStream;
 import java.util.Properties;
-import java.sql.SQLException;  // ← добавить этот импорт
+import java.sql.SQLException;
 
 public class DatabaseConfig {
     private static final Properties props = new Properties();
@@ -54,18 +54,12 @@ public class DatabaseConfig {
     }
 
     public static String getTeacherSecret() {
-        // Сначала пробуем из переменной окружения
-        String envSecret = System.getenv("TEACHER_SECRET");
-        if (envSecret != null && !envSecret.isEmpty()) {
-            return envSecret;
-        }
-        // Если нет - из properties
         return props.getProperty("teacher.secret", "teacher123");
     }
 
     // Получение подключения в зависимости от роли
     public static java.sql.Connection getConnection(Role role, String dbName, String studentName)
-            throws SQLException {  // ← теперь компилятор знает, что такое SQLException
+            throws SQLException {
 
         String url;
         String user;
@@ -83,7 +77,6 @@ public class DatabaseConfig {
                 password = getTeacherPassword();
                 break;
             case STUDENT:
-                // dbName должен быть передан обязательно
                 if (dbName == null || dbName.isEmpty()) {
                     throw new SQLException("Database name is required for STUDENT connection");
                 }
@@ -96,5 +89,15 @@ public class DatabaseConfig {
         }
 
         return java.sql.DriverManager.getConnection(url, user, password);
+    }
+
+    // Добавим метод для получения таймаута
+    public static int getQueryTimeout() {
+        return Integer.parseInt(props.getProperty("db.query.timeout", "30"));
+    }
+
+    // Добавим метод для получения максимального количества строк
+    public static int getMaxRows() {
+        return Integer.parseInt(props.getProperty("db.max.rows", "1000"));
     }
 }
