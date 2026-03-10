@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15
+    container_name: sql_tutor_postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./setup_database.sql:/docker-entrypoint-initdb.d/setup_database.sql
+    networks:
+      - sql_tutor_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Веб-приложение
+  app:
+    build: .
+    container_name: sql_tutor_app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: postgres
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_ADMIN_PASSWORD:-postgres}
+      TEACHER_SECRET: ${TEACHER_SECRET:-teacher123}
+    ports:
+      - "8081:8080"
+    networks:
+      - sql_tutor_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    name: sql_tutor_postgres_data
+
+networks:
+  sql_tutor_network:
+    name: sql_tutor_network
+    driver: bridge

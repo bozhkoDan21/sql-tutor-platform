@@ -54,7 +54,8 @@ public class QueryExecutor {
                 DatabaseConfig.Role.STUDENT, dbName, null);
              Statement stmt = conn.createStatement()) {
 
-            // Дополнительная защита
+            // Таймаут 3 секунды
+            stmt.setQueryTimeout(3);
             stmt.setMaxRows(1000);
 
             // EXPLAIN
@@ -93,7 +94,7 @@ public class QueryExecutor {
 
         } catch (SQLException e) {
             if (e.getMessage().contains("timeout")) {
-                result.setError("Query timeout (max 30 seconds)");
+                result.setError("Query timeout (max 3 seconds)");
             } else {
                 result.setError(e.getMessage());
             }
