@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', function() {
-
     const executeBtn = document.getElementById('executeBtn');
     const clearBtn = document.getElementById('clearBtn');
     const sqlQuery = document.getElementById('sqlQuery');
@@ -7,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const executionTime = document.getElementById('executionTime');
     const rowCount = document.getElementById('rowCount');
     const explainContainer = document.getElementById('explainContainer');
+    const dbSelector = document.getElementById('dbSelector');
 
     if (executeBtn) {
         executeBtn.addEventListener('click', function() {
@@ -20,13 +20,54 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Загружаем информацию о базе данных при старте
-    loadDbInfo();
+    // Загружаем список доступных баз
+    loadDatabases();
+
+    function loadDatabases() {
+        fetch('/api/databases')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.databases && data.databases.length > 0) {
+                    // Очищаем селект
+                    dbSelector.innerHTML = '<option value="">Выберите базу данных</option>';
+
+                    // Добавляем базы в селект
+                    data.databases.forEach(db => {
+                        const option = document.createElement('option');
+                        option.value = db;
+                        option.textContent = db;
+                        dbSelector.appendChild(option);
+                    });
+
+                    // Если есть сохраненная база в localStorage, выбираем её
+                    const savedDb = localStorage.getItem('selectedDatabase');
+                    if (savedDb && data.databases.includes(savedDb)) {
+                        dbSelector.value = savedDb;
+                        changeDatabase(savedDb);
+                    } else if (data.databases.length > 0) {
+                        // Иначе выбираем первую базу
+                        dbSelector.value = data.databases[0];
+                        changeDatabase(data.databases[0]);
+                    }
+                } else {
+                    dbSelector.innerHTML = '<option value="">Нет доступных баз</option>';
+                    document.getElementById('dbInfoCard').style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading databases:', error);
+                dbSelector.innerHTML = '<option value="">Ошибка загрузки баз</option>';
+            });
+    }
 
     function executeQuery() {
-        const query = sqlQuery.value;
-        const dbName = 'sql_tutor_university_db';  // явно указываем имя базы
+        const selectedDb = dbSelector.value;
+        if (!selectedDb) {
+            alert('Выберите базу данных');
+            return;
+        }
 
+        const query = sqlQuery.value;
         if (!query.trim()) {
             alert('Введите SQL запрос');
             return;
@@ -40,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: new URLSearchParams({
-                'database': dbName,  // передаём имя базы
+                'database': selectedDb,
                 'query': query
             })
         })
@@ -91,7 +132,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function clearResult() {
         if (sqlQuery) sqlQuery.value = '';
         if (resultContainer) {
-            resultContainer.innerHTML = '<div class="empty-state">Нажмите "Выполнить", чтобы увидеть результат</div>';
+            resultContainer.innerHTML = '<div class="empty-state">Выберите базу данных и выполните запрос</div>';
         }
         if (executionTime) executionTime.textContent = '';
         if (rowCount) rowCount.textContent = '';
@@ -102,24 +143,31 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Функция загрузки информации о базе данных
-function loadDbInfo() {
-    const dbName = 'sql_tutor_university_db';
+function loadDbInfo(dbName) {
+    if (!dbName) return;
 
     fetch('/api/dbinfo?db=' + encodeURIComponent(dbName))
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 document.getElementById('dbName').textContent = data.dbName;
+                document.getElementById('currentDbBadge').textContent = data.dbName;
+                document.getElementById('dbInfoCard').style.display = 'block';
 
                 const tablesList = document.getElementById('tablesList');
                 tablesList.innerHTML = '';
 
-                data.tables.sort().forEach(table => {
-                    const li = document.createElement('li');
-                    li.textContent = table;
-                    tablesList.appendChild(li);
-                });
+                if (data.tables && data.tables.length > 0) {
+                    data.tables.sort().forEach(table => {
+                        const li = document.createElement('li');
+                        li.textContent = table;
+                        tablesList.appendChild(li);
+                    });
+                } else {
+                    tablesList.innerHTML = '<li style="grid-column: 1/-1; text-align: center;">Нет таблиц</li>';
+                }
             } else {
+                document.getElementById('dbInfoCard').style.display = 'none';
                 document.getElementById('tablesList').innerHTML =
                     `<li style="grid-column: 1/-1; color: #ef4444; text-align: center;">
                         ❌ Ошибка: ${data.error}
@@ -130,4 +178,26 @@ function loadDbInfo() {
             document.getElementById('tablesList').innerHTML =
                 '<li style="grid-column: 1/-1; color: #ef4444; text-align: center;">❌ Ошибка соединения</li>';
         });
+}
+
+// Функция смены базы данных
+function changeDatabase(dbName) {
+    if (!dbName) {
+        document.getElementById('dbInfoCard').style.display = 'none';
+        return;
+    }
+
+    // Сохраняем выбор в localStorage
+    localStorage.setItem('selectedDatabase', dbName);
+
+    // Загружаем информацию о новой базе
+    loadDbInfo(dbName);
+
+    // Очищаем результаты предыдущих запросов
+    document.getElementById('resultContainer').innerHTML =
+        '<div class="empty-state">Выберите базу данных и выполните запрос</div>';
+    document.getElementById('executionTime').textContent = '';
+    document.getElementById('rowCount').textContent = '';
+    document.getElementById('explainContainer').innerHTML =
+        '-- Здесь появится вывод EXPLAIN ANALYZE';
 }

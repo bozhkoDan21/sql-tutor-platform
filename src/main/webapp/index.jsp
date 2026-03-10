@@ -32,7 +32,7 @@
         <!-- Заголовок -->
         <div class="page-header">
             <h2 class="page-title">Выполнение SQL-запросов</h2>
-            <p class="page-description">База данных: <strong>sql_tutor_university_db</strong></p>
+            <p class="page-description">Выберите базу данных и напишите запрос</p>
         </div>
 
         <div class="two-columns">
@@ -41,13 +41,21 @@
                 <div class="card">
                     <h3 class="card-title">
                         <span class="icon">📁</span>
-                        Текущая база данных
+                        Выберите базу данных
                     </h3>
 
-                    <div class="db-info-card">
+                    <!-- Выпадающий список баз данных -->
+                    <div class="db-selector">
+                        <select id="dbSelector" class="db-select" onchange="changeDatabase(this.value)">
+                            <option value="">Загрузка баз...</option>
+                        </select>
+                    </div>
+
+                    <!-- Блок информации о БД (изначально скрыт) -->
+                    <div class="db-info-card" id="dbInfoCard" style="display: none;">
                         <div class="db-header">
                             <span class="db-icon">🗄️</span>
-                            <span class="db-name" id="dbName">sql_tutor_university_db</span>
+                            <span class="db-name" id="dbName"></span>
                         </div>
 
                         <div class="db-tables-section">
@@ -65,7 +73,7 @@
                         <div class="connection-status">
                             <span class="status-indicator online"></span>
                             <span class="status-text">PostgreSQL: подключено</span>
-                            <span class="db-badge">sql_tutor_university_db</span>
+                            <span class="db-badge" id="currentDbBadge"></span>
                         </div>
                     </div>
                 </div>
@@ -80,7 +88,7 @@
                     </h3>
 
                     <div class="editor-container">
-                        <textarea id="sqlQuery" class="sql-editor" placeholder="Введите SQL запрос...">SELECT * FROM student LIMIT 10;</textarea>
+                        <textarea id="sqlQuery" class="sql-editor" placeholder="Введите SQL запрос..."></textarea>
 
                         <div class="editor-toolbar">
                             <button id="executeBtn" class="btn btn-primary">
@@ -103,7 +111,7 @@
 
                         <div id="resultContainer" class="results-table">
                             <div class="empty-state">
-                                Нажмите "Выполнить", чтобы увидеть результат
+                                Выберите базу данных и выполните запрос
                             </div>
                         </div>
                     </div>
@@ -120,6 +128,6 @@
         </div>
     </main>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=1.0"></script>
 </body>
 </html>

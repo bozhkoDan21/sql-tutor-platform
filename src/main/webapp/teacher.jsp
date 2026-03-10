@@ -207,22 +207,12 @@
 
             <form id="uploadForm" class="upload-form">
                 <div class="form-group">
-                    <label class="form-label">Название базы данных</label>
-                    <input type="text" name="dbName" class="form-input" placeholder="Например: Туристическое агентство" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Описание</label>
-                    <textarea name="description" class="form-textarea" rows="2" placeholder="Краткое описание и список таблиц"></textarea>
-                </div>
-
-                <div class="form-group">
                     <label class="form-label">SQL-скрипт</label>
                     <div class="file-upload">
-                        <input type="file" id="sqlFile" accept=".sql" class="file-input" onchange="updateFileLabel(this)">
+                        <input type="file" id="sqlFile" accept=".sql" class="file-input" onchange="updateFileLabel(this)" required>
                         <label for="sqlFile" class="file-label" id="fileLabel">
                             <span class="file-icon">📎</span>
-                            <span id="fileName">Выберите файл или перетащите</span>
+                            <span id="fileName">Выберите SQL файл</span>
                         </label>
                     </div>
                     <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 0.25rem;">
@@ -276,7 +266,7 @@
                 fileUpload.style.borderColor = 'var(--primary)';
                 fileUpload.style.background = 'var(--primary-light)';
             } else {
-                fileNameSpan.textContent = 'Выберите файл или перетащите';
+                fileNameSpan.textContent = 'Выберите SQL файл';
                 fileUpload.style.borderColor = 'var(--border)';
                 fileUpload.style.background = 'var(--light)';
             }
@@ -472,11 +462,10 @@
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
-            var dbName = document.querySelector('input[name="dbName"]').value;
             var fileInput = document.getElementById('sqlFile');
             var file = fileInput.files[0];
 
-            console.log("Upload form submitted for database:", dbName);
+            console.log("Upload form submitted");
             console.log("File selected:", file?.name);
 
             if (!file) {
@@ -502,7 +491,6 @@
 
             var formData = new FormData();
             formData.append('action', 'upload');
-            formData.append('dbName', dbName);
             formData.append('sqlFile', file);
 
             var eventSource = new EventSource('/api/logs');
@@ -569,60 +557,39 @@
 
                         addLogMessage('Файл загружен, начинается выполнение SQL скрипта...', 'success');
 
-                        // Детальные шаги выполнения
-                        var steps = [
-                            'Создание справочных таблиц...',
-                            'Создание таблицы archaeologists (500 записей)...',
-                            'Создание таблицы finds (50,000 записей)...',
-                            'Создание таблицы artifacts (10,000,000 записей)...',
-                            'Создание индексов для оптимизации...',
-                            'Установка прав доступа для студентов...'
-                        ];
+                        if (data.success) {
+                            progressFill.style.width = '100%';
+                            loadingText.textContent = 'Готово!';
+                            loadingStatus.textContent = 'База данных успешно создана';
+                            addLogMessage('✅ База данных успешно создана!', 'success');
 
-                        var stepIndex = 0;
-                        var stepInterval = setInterval(function() {
-                            if (stepIndex < steps.length) {
-                                addLogMessage(steps[stepIndex], 'info');
-                                progressFill.style.width = (10 + (stepIndex + 1) * 15) + '%';
-                                stepIndex++;
-                            } else {
-                                clearInterval(stepInterval);
-
-                                if (data.success) {
-                                    progressFill.style.width = '100%';
-                                    loadingText.textContent = 'Готово!';
-                                    loadingStatus.textContent = 'База данных успешно создана';
-                                    addLogMessage('✅ База данных "' + dbName + '" успешно создана!', 'success');
-
-                                    // Закрываем SSE соединение
-                                    if (eventSource) {
-                                        eventSource.close();
-                                    }
-
-                                    setTimeout(function() {
-                                        overlay.style.display = 'none';
-
-                                        // Сброс формы и визуального состояния
-                                        document.getElementById('uploadForm').reset();
-                                        document.getElementById('fileName').textContent = 'Выберите файл или перетащите';
-                                        var fileUpload = document.querySelector('.file-upload');
-                                        fileUpload.style.borderColor = 'var(--border)';
-                                        fileUpload.style.background = 'var(--light)';
-
-                                        loadDatabases();
-                                    }, 2000);
-                                } else {
-                                    overlay.style.display = 'none';
-                                    addLogMessage('❌ Ошибка: ' + data.error, 'error');
-                                    alert('Ошибка: ' + data.error);
-
-                                    // Закрываем SSE соединение при ошибке
-                                    if (eventSource) {
-                                        eventSource.close();
-                                    }
-                                }
+                            // Закрываем SSE соединение
+                            if (eventSource) {
+                                eventSource.close();
                             }
-                        }, 1500);
+
+                            setTimeout(function() {
+                                overlay.style.display = 'none';
+
+                                // Сброс формы и визуального состояния
+                                document.getElementById('uploadForm').reset();
+                                document.getElementById('fileName').textContent = 'Выберите SQL файл';
+                                var fileUpload = document.querySelector('.file-upload');
+                                fileUpload.style.borderColor = 'var(--border)';
+                                fileUpload.style.background = 'var(--light)';
+
+                                loadDatabases();
+                            }, 2000);
+                        } else {
+                            overlay.style.display = 'none';
+                            addLogMessage('❌ Ошибка: ' + data.error, 'error');
+                            alert('Ошибка: ' + data.error);
+
+                            // Закрываем SSE соединение при ошибке
+                            if (eventSource) {
+                                eventSource.close();
+                            }
+                        }
 
                     } catch (e) {
                         overlay.style.display = 'none';
