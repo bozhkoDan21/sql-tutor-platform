@@ -98,6 +98,10 @@
                             <button id="clearBtn" class="btn btn-secondary">
                                 Очистить
                             </button>
+                            <button id="downloadBtn" class="btn btn-secondary" style="margin-left: auto;">
+                                <span class="btn-icon">📥</span>
+                                Скачать CSV
+                            </button>
                             <span id="executionTime" class="execution-time"></span>
                         </div>
                     </div>
@@ -128,6 +132,6 @@
         </div>
     </main>
 
-    <script src="script.js?v=1.0"></script>
+    <script src="script.js?v=2.0"></script>
 </body>
 </html>

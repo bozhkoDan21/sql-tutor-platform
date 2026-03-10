@@ -777,6 +777,22 @@ tr:hover td {
     padding: 0.5rem;
 }
 
+/* Стили для кнопки скачивания */
+.btn-download {
+    background: var(--white);
+    color: var(--success);
+    border: 2px solid var(--success-light);
+    margin-left: auto;
+}
+
+.btn-download:hover {
+    background: var(--success);
+    border-color: var(--success);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
 /* Утилиты */
 .text-center { text-align: center; }
 .mt-2 { margin-top: 0.5rem; }
