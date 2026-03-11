@@ -1,9 +1,10 @@
 version: '3.8'
 
 services:
-  # PostgreSQL база данных
   postgres:
-    image: postgres:15
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     container_name: sql_tutor_postgres
     environment:
       POSTGRES_DB: postgres
@@ -13,7 +14,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./setup_database.sql:/docker-entrypoint-initdb.d/setup_database.sql
     networks:
       - sql_tutor_network
     restart: unless-stopped

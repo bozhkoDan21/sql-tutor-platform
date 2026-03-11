@@ -7,6 +7,10 @@ import java.sql.SQLException;
 public class DatabaseConfig {
     private static final Properties props = new Properties();
 
+    // Переменные окружения для подключения к БД
+    private static final String DB_HOST = System.getenv().getOrDefault("DB_HOST", "localhost");
+    private static final String DB_PORT = System.getenv().getOrDefault("DB_PORT", "5432");
+
     // Роли
     public enum Role {
         ADMIN, TEACHER, STUDENT
@@ -24,7 +28,12 @@ public class DatabaseConfig {
 
     // Админское подключение (создание баз)
     public static String getAdminUrl() {
-        return props.getProperty("db.admin.url", "jdbc:postgresql://localhost:5432/postgres");
+        String propUrl = props.getProperty("db.admin.url", null);
+        if (propUrl != null && !propUrl.contains("${")) {
+            return propUrl;
+        }
+        // Если в properties используется localhost, заменяем на DB_HOST из окружения
+        return "jdbc:postgresql://" + DB_HOST + ":" + DB_PORT + "/postgres";
     }
 
     public static String getAdminUser() {
@@ -32,12 +41,15 @@ public class DatabaseConfig {
     }
 
     public static String getAdminPassword() {
-        return props.getProperty("db.admin.password", "postgres");
+        String propPass = props.getProperty("db.admin.password", "postgres");
+        // Если пароль задан через переменную окружения
+        String envPass = System.getenv("DB_ADMIN_PASSWORD");
+        return envPass != null ? envPass : propPass;
     }
 
     // Подключение для преподавателя
     public static String getTeacherUrl(String dbName) {
-        return "jdbc:postgresql://localhost:5432/" + dbName;
+        return "jdbc:postgresql://" + DB_HOST + ":" + DB_PORT + "/" + dbName;
     }
 
     public static String getTeacherUser() {
@@ -50,10 +62,14 @@ public class DatabaseConfig {
 
     // Подключение для студента
     public static String getStudentUrl(String dbName) {
-        return "jdbc:postgresql://localhost:5432/" + dbName;
+        return "jdbc:postgresql://" + DB_HOST + ":" + DB_PORT + "/" + dbName;
     }
 
     public static String getTeacherSecret() {
+        String envSecret = System.getenv("TEACHER_SECRET");
+        if (envSecret != null && !envSecret.isEmpty()) {
+            return envSecret;
+        }
         return props.getProperty("teacher.secret", "teacher123");
     }
 
@@ -91,13 +107,23 @@ public class DatabaseConfig {
         return java.sql.DriverManager.getConnection(url, user, password);
     }
 
-    // Добавим метод для получения таймаута
+    // Метод для получения таймаута
     public static int getQueryTimeout() {
-        return Integer.parseInt(props.getProperty("db.query.timeout", "30"));
+        return Integer.parseInt(props.getProperty("db.query.timeout", "3"));
     }
 
-    // Добавим метод для получения максимального количества строк
+    // Метод для получения максимального количества строк
     public static int getMaxRows() {
         return Integer.parseInt(props.getProperty("db.max.rows", "1000"));
+    }
+
+    // Метод для получения хоста (для отладки)
+    public static String getDbHost() {
+        return DB_HOST;
+    }
+
+    // Метод для получения порта (для отладки)
+    public static String getDbPort() {
+        return DB_PORT;
     }
 }
