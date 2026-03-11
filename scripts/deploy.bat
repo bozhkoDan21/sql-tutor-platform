@@ -7,11 +7,17 @@ echo.
 
 REM Проверка наличия .env файла
 if not exist .env (
-    echo ⚠️ Файл .env не найден. Создаю из шаблона...
-    echo TEACHER_SECRET=teacher123 > .env
-    echo DB_ADMIN_PASSWORD=postgres >> .env
-    echo ✅ Файл .env создан.
-    echo ℹ️ Рекомендуется изменить пароль TEACHER_SECRET в файле .env
+    echo ⚠️ Файл .env не найден. Создаю из config\.env.example...
+    if exist config\.env.example (
+        copy config\.env.example .env
+        echo ✅ Файл .env создан из шаблона
+        echo ℹ️ Рекомендуется изменить пароль TEACHER_SECRET в файле .env
+    ) else (
+        echo ⚠️ Файл config\.env.example не найден!
+        echo TEACHER_SECRET=teacher123 > .env
+        echo DB_ADMIN_PASSWORD=postgres >> .env
+        echo ✅ Базовый .env создан
+    )
     echo.
 ) else (
     echo ✅ Файл .env найден

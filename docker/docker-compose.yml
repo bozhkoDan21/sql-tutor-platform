@@ -3,8 +3,8 @@ version: '3.8'
 services:
   postgres:
     build:
-      context: .
-      dockerfile: Dockerfile.postgres
+      context: ..  # контекст - корневая папка проекта
+      dockerfile: docker/Dockerfile.postgres
     container_name: sql_tutor_postgres
     environment:
       POSTGRES_DB: postgres
@@ -23,9 +23,10 @@ services:
       timeout: 5s
       retries: 5
 
-  # Веб-приложение
   app:
-    build: .
+    build:
+      context: ..  # контекст - корневая папка проекта
+      dockerfile: docker/Dockerfile
     container_name: sql_tutor_app
     depends_on:
       postgres:
