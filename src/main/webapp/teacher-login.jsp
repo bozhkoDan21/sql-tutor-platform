@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SQL Tutor - Вход для преподавателя</title>
+    <title>SQL Trainer - Вход для преподавателя</title>
     <link rel="stylesheet" href="style.css">
     <style>
         .login-container {
@@ -38,7 +38,7 @@
     <div class="login-container">
         <div class="card">
             <div class="login-header">
-                <h1>🔐 SQL Tutor</h1>
+                <h1>🔐 SQL Trainer</h1>
                 <p>Вход в панель преподавателя</p>
             </div>
 

@@ -11,7 +11,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SQL Tutor - Панель преподавателя</title>
+    <title>SQL Trainer - Панель преподавателя</title>
     <link rel="stylesheet" href="style.css">
     <style>
         /* Индикатор загрузки */
@@ -187,7 +187,7 @@
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-left">
-                <h1 class="logo">SQL Tutor</h1>
+                <h1 class="logo">SQL Trainer</h1>
                 <span class="badge">Панель преподавателя</span>
             </div>
             <div class="nav-right">
@@ -205,7 +205,7 @@
         <div class="card">
             <h3 class="card-title">Загрузить новую учебную базу</h3>
 
-            <form id="uploadForm" class="upload-form">
+            <form id="uploadForm" class="upload-form" autocomplete="off">
                 <div class="form-group">
                     <label class="form-label">SQL-скрипт</label>
                     <div class="file-upload">

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SQL Tutor - учебная платформа</title>
+    <title>SQL Trainer - учебная платформа</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-left">
-                <h1 class="logo">SQL Tutor</h1>
+                <h1 class="logo">SQL Trainer</h1>
                 <span class="badge">Учебная песочница</span>
             </div>
             <div class="nav-right">
@@ -88,7 +88,8 @@
                     </h3>
 
                     <div class="editor-container">
-                        <textarea id="sqlQuery" class="sql-editor" placeholder="Введите SQL запрос..."></textarea>
+                        <textarea id="sqlQuery" class="sql-editor" placeholder="Введите SQL запрос..."
+                            autocomplete="off" spellcheck="false"></textarea>
 
                         <div class="editor-toolbar">
                             <button id="executeBtn" class="btn btn-primary">
