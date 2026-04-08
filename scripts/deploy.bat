@@ -2,77 +2,114 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-echo Начало развертывания SQL Trainer...
+echo ========================================
+echo    SQL Trainer - Развертывание
+echo ========================================
 echo.
 
-REM Проверка наличия .env файла
+REM Переходим в корень проекта (папка, где лежит pom.xml)
+cd /d "%~dp0.."
+
+REM Проверка наличия pom.xml (убеждаемся, что мы в корне)
+if not exist pom.xml (
+    echo [ERROR] Не найден pom.xml в текущей папке
+    echo Убедитесь, что скрипт находится в папке scripts
+    pause
+    exit /b 1
+)
+
+echo [OK] Корень проекта: %CD%
+echo.
+
+REM Проверка наличия .env файла в корне
 if not exist .env (
-    echo Файл .env не найден. Создаю из config\.env.example...
-    if exist config\.env.example (
-        copy config\.env.example .env
-        echo ✅ Файл .env создан из шаблона
-        echo Рекомендуется изменить пароль TEACHER_SECRET в файле .env
-    ) else (
-        echo Файл config\.env.example не найден!
-        echo TEACHER_SECRET=teacher123 > .env
-        echo DB_ADMIN_PASSWORD=postgres >> .env
-        echo Базовый .env создан
-    )
+    echo [WARN] Файл .env не найден!
+    echo Создаю файл .env с настройками по умолчанию...
+    (
+        echo # Database configuration
+        echo DB_HOST=postgres
+        echo DB_PORT=5432
+        echo DB_ADMIN_USER=postgres
+        echo DB_ADMIN_PASSWORD=postgres
+        echo DB_TEACHER_USER=teacher_role
+        echo DB_TEACHER_PASSWORD=teacher_pass
+        echo DB_STUDENT_USER=students
+        echo DB_STUDENT_PASSWORD=student_pass
+        echo.
+        echo # Security
+        echo TEACHER_SECRET=teacher123
+        echo.
+        echo # Limits
+        echo QUERY_TIMEOUT_SEC=3
+        echo MAX_ROWS=1000
+        echo CONNECTION_TIMEOUT_MS=5000
+    ) > .env
+    echo [OK] Файл .env создан
+    echo [i] Рекомендуется изменить TEACHER_SECRET в файле .env
     echo.
 ) else (
-    echo Файл .env найден
+    echo [OK] Файл .env найден
     echo.
 )
 
 REM Сборка проекта
-echo Сборка проекта...
+echo [1/4] Сборка проекта...
 call mvn clean package
 
 if %errorlevel% neq 0 (
-    echo ❌ Ошибка сборки проекта!
+    echo [ERROR] Ошибка сборки проекта!
     pause
     exit /b %errorlevel%
 )
-
-echo Сборка завершена успешно
+echo [OK] Сборка завершена успешно
 echo.
 
-REM Остановка старых контейнеров
-echo Остановка старых контейнеров...
-docker-compose down
+REM Переходим в папку с Docker файлами
+cd docker
 
-if %errorlevel% neq 0 (
-    echo Ошибка при остановке контейнеров, продолжаем...
+REM Проверка наличия docker-compose.yml
+if not exist docker-compose.yml (
+    echo [ERROR] Файл docker-compose.yml не найден в папке docker
+    pause
+    exit /b 1
 )
 
+REM Остановка старых контейнеров
+echo [2/4] Остановка старых контейнеров...
+docker-compose down 2>nul
+echo [OK] Контейнеры остановлены
 echo.
 
 REM Запуск новых контейнеров
-echo Запуск контейнеров...
+echo [3/4] Запуск контейнеров...
 docker-compose up -d --build
 
 if %errorlevel% neq 0 (
-    echo ❌ Ошибка при запуске контейнеров!
+    echo [ERROR] Ошибка при запуске контейнеров!
     pause
     exit /b %errorlevel%
 )
-
+echo [OK] Контейнеры запущены
 echo.
 
 REM Проверка статуса
-echo Проверка статуса контейнеров...
+echo [4/4] Проверка статуса контейнеров...
 timeout /t 5 /nobreak >nul
 docker-compose ps
 
+cd ..
+
 echo.
-echo Развертывание завершено!
+echo ========================================
+echo    РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО
+echo ========================================
 echo.
-echo Приложение доступно по адресу: http://localhost:8081
-echo Вход для преподавателя: http://localhost:8081/teacher-login.jsp
+echo [i] Приложение: http://localhost:8081
+echo [i] Панель преподавателя: http://localhost:8081/teacher-login.jsp
 
 REM Чтение пароля из .env файла
 for /f "tokens=2 delims==" %%a in ('findstr /i "TEACHER_SECRET" .env') do set pass=%%a
-echo    Пароль: %pass%
-
+echo [i] Пароль преподавателя: %pass%
 echo.
+
 pause
