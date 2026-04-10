@@ -74,7 +74,7 @@ public class DatabaseConfig {
         adminConfig.setPassword(ADMIN_PASSWORD);
         adminConfig.setMaximumPoolSize(2);
         adminConfig.setConnectionTimeout(CONNECTION_TIMEOUT_MS);
-        adminConfig.setInitializationFailTimeout(30000); // 30 секунд на инициализацию
+        adminConfig.setInitializationFailTimeout(30000);
         adminConfig.setConnectionTestQuery("SELECT 1");
         adminConfig.setPoolName("admin-pool");
 
@@ -141,6 +141,9 @@ public class DatabaseConfig {
             config.setUsername(TEACHER_USER);
             config.setPassword(TEACHER_PASSWORD);
             config.setMaximumPoolSize(3);
+            config.setMinimumIdle(1);
+            config.setIdleTimeout(300000);
+            config.setMaxLifetime(600000);
             config.setConnectionTimeout(CONNECTION_TIMEOUT_MS);
             config.setInitializationFailTimeout(30000);
             config.setConnectionTestQuery("SELECT 1");
@@ -152,6 +155,15 @@ public class DatabaseConfig {
     /**
      * Возвращает пул соединений для студентов к указанной базе данных.
      * Соединения открываются в режиме только для чтения (readOnly=true).
+     * <p>
+     * Настройки пула:
+     * <ul>
+     *   <li>maximumPoolSize=5 — максимум 5 одновременных соединений на базу</li>
+     *   <li>minimumIdle=1 — всегда держим 1 готовое соединение</li>
+     *   <li>idleTimeout=300000 — закрываем неиспользуемые соединения через 5 минут</li>
+     *   <li>maxLifetime=600000 — пересоздаём соединения каждые 10 минут</li>
+     * </ul>
+     * </p>
      *
      * @param dbName имя базы данных
      * @return пул соединений HikariCP для студентов
@@ -162,7 +174,10 @@ public class DatabaseConfig {
             config.setJdbcUrl(String.format("jdbc:postgresql://%s:%s/%s", DB_HOST, DB_PORT, name));
             config.setUsername(STUDENT_USER);
             config.setPassword(STUDENT_PASSWORD);
-            config.setMaximumPoolSize(10);
+            config.setMaximumPoolSize(5);           // Уменьшено с 10 до 5
+            config.setMinimumIdle(1);               // Держим 1 готовое соединение
+            config.setIdleTimeout(300000);           // 5 минут простоя — закрыть лишние
+            config.setMaxLifetime(600000);           // 10 минут жизни соединения
             config.setConnectionTimeout(CONNECTION_TIMEOUT_MS);
             config.setReadOnly(true);
             config.setInitializationFailTimeout(30000);
@@ -198,6 +213,34 @@ public class DatabaseConfig {
     }
 
     /**
+     * Закрывает пул соединений для указанной базы данных (студенческий).
+     * Используется при удалении базы данных.
+     *
+     * @param dbName имя базы данных
+     */
+    public static void closeStudentPool(String dbName) {
+        HikariDataSource ds = studentDataSources.remove(dbName);
+        if (ds != null && !ds.isClosed()) {
+            ds.close();
+            log.info("Closed student pool for database: {}", dbName);
+        }
+    }
+
+    /**
+     * Закрывает пул соединений для указанной базы данных (преподавательский).
+     * Используется при удалении базы данных.
+     *
+     * @param dbName имя базы данных
+     */
+    public static void closeTeacherPool(String dbName) {
+        HikariDataSource ds = teacherDataSources.remove(dbName);
+        if (ds != null && !ds.isClosed()) {
+            ds.close();
+            log.info("Closed teacher pool for database: {}", dbName);
+        }
+    }
+
+    /**
      * Закрывает все пулы соединений.
      * Должен вызываться при остановке приложения (например, в ServletContextListener).
      */
@@ -205,12 +248,23 @@ public class DatabaseConfig {
         if (adminDataSource != null && !adminDataSource.isClosed()) {
             adminDataSource.close();
         }
-        studentDataSources.values().forEach(ds -> {
-            if (!ds.isClosed()) ds.close();
+
+        studentDataSources.forEach((name, ds) -> {
+            if (!ds.isClosed()) {
+                ds.close();
+                log.info("Closed student pool for: {}", name);
+            }
         });
-        teacherDataSources.values().forEach(ds -> {
-            if (!ds.isClosed()) ds.close();
+        studentDataSources.clear();
+
+        teacherDataSources.forEach((name, ds) -> {
+            if (!ds.isClosed()) {
+                ds.close();
+                log.info("Closed teacher pool for: {}", name);
+            }
         });
+        teacherDataSources.clear();
+
         log.info("All database pools closed");
     }
 

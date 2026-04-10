@@ -169,6 +169,83 @@ body {
     font-size: 1.25rem;
 }
 
+/* Блок подсказок */
+.hints-card {
+    margin-top: 1.5rem;
+}
+
+.hints-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.hint-details {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--white);
+    transition: all 0.2s;
+}
+
+.hint-details:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow);
+}
+
+.hint-summary {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--dark);
+    background: var(--light);
+    border-radius: var(--radius);
+    transition: all 0.2s;
+    user-select: none;
+}
+
+.hint-summary:hover {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+.hint-content {
+    padding: 1rem;
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border);
+    background: #1a1a1a;
+    border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.hint-content pre {
+    margin: 0;
+    color: #4ade80;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.hint-content code {
+    color: #4ade80;
+    font-family: 'Courier New', monospace;
+}
+
+.hint-content ul {
+    margin: 0;
+    padding-left: 1.5rem;
+    color: #f8f8f2;
+}
+
+.hint-content li {
+    margin: 0.5rem 0;
+    color: #f8f8f2;
+}
+
+.hint-content li strong {
+    color: #f59e0b;
+}
+
 /* Улучшенный блок информации о БД */
 .db-header {
     display: flex;
@@ -243,19 +320,25 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    cursor: pointer;
 }
 
 .tables-grid li:hover {
-    background: var(--white);
+    background: var(--primary);
     border-color: var(--primary);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(79, 70, 229, 0.1);
+    color: white;
+    transform: translateX(4px);
+    box-shadow: 0 4px 8px rgba(79, 70, 229, 0.2);
 }
 
 .tables-grid li::before {
     content: '📊';
     font-size: 0.85rem;
     opacity: 0.7;
+}
+
+.tables-grid li:hover::before {
+    opacity: 1;
 }
 
 /* Скроллбар для списка таблиц */
@@ -331,32 +414,12 @@ body {
     margin-bottom: 1.5rem;
 }
 
-.sql-editor {
-    width: 100%;
-    padding: 1rem;
-    border: 2px solid var(--border);
-    border-radius: var(--radius);
-    font-family: 'Courier New', monospace;
-    font-size: 14px;
-    line-height: 1.6;
-    resize: vertical;
-    min-height: 200px;
-    background: var(--light);
-    transition: all 0.2s;
-}
-
-.sql-editor:focus {
-    outline: none;
-    border-color: var(--primary);
-    background: var(--white);
-    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
-}
-
 .editor-toolbar {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     margin-top: 0.75rem;
+    flex-wrap: wrap;
 }
 
 /* Кнопки */
@@ -414,7 +477,7 @@ body {
     border-radius: 2rem;
 }
 
-/* Результаты */
+/* Результаты запроса - улучшенная таблица */
 .results-section {
     margin-bottom: 1rem;
 }
@@ -456,40 +519,55 @@ body {
     font-style: italic;
 }
 
-/* Таблица */
-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9rem;
+/* Таблица результатов */
+.table-wrapper {
+    overflow-x: auto;
+    max-width: 100%;
+    border-radius: var(--radius);
 }
 
-th {
-    background: linear-gradient(135deg, var(--light) 0%, #f3f4f6 100%);
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    min-width: 500px;
+}
+
+.results-table th {
+    background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%);
+    color: white;
     padding: 0.75rem 1rem;
     text-align: left;
-    font-size: 0.75rem;
     font-weight: 600;
+    font-size: 0.8rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-light);
-    border-bottom: 2px solid var(--border);
+    letter-spacing: 0.5px;
     position: sticky;
     top: 0;
     z-index: 10;
+    white-space: nowrap;
 }
 
-td {
-    padding: 0.75rem 1rem;
+.results-table td {
+    padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--border);
     color: var(--text);
     font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-tr:last-child td {
-    border-bottom: none;
+.results-table td:hover {
+    overflow: visible;
+    white-space: normal;
+    word-wrap: break-word;
+    background: var(--primary-light);
 }
 
-tr:hover td {
+.results-table tr:hover td {
     background: var(--primary-light);
 }
 
@@ -526,6 +604,8 @@ tr:hover td {
     overflow-x: auto;
     margin: 0;
     line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 /* Формы для преподавателя */
@@ -673,15 +753,68 @@ tr:hover td {
 
 .sessions-list table {
     font-size: 0.85rem;
+    width: 100%;
+    border-collapse: collapse;
 }
 
 .sessions-list th {
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     color: #fff;
+    padding: 0.5rem;
+    text-align: left;
 }
 
 .sessions-list td {
     font-family: inherit;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+/* CodeMirror редактор SQL */
+.CodeMirror {
+    height: auto;
+    min-height: 200px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
+    background: #282a36;
+}
+
+.CodeMirror-focused {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+}
+
+/* Подсказки CodeMirror */
+.CodeMirror-hints {
+    position: absolute;
+    z-index: 10;
+    overflow: hidden;
+    list-style: none;
+    margin: 0;
+    padding: 2px;
+    background: #282a36;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--primary);
+    font-family: monospace;
+    font-size: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.CodeMirror-hint {
+    margin: 0;
+    padding: 4px 8px;
+    border-radius: 2px;
+    white-space: pre;
+    color: #f8f8f2;
+    cursor: pointer;
+}
+
+li.CodeMirror-hint-active {
+    background: var(--primary);
+    color: white;
 }
 
 /* Адаптивность */
@@ -729,6 +862,16 @@ tr:hover td {
 
     .page-title {
         font-size: 1.5rem;
+    }
+
+    .results-table th,
+    .results-table td {
+        padding: 0.5rem;
+        font-size: 0.7rem;
+    }
+
+    .editor-toolbar {
+        flex-wrap: wrap;
     }
 }
 

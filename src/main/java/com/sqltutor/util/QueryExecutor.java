@@ -13,23 +13,27 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Выполнение SQL-запросов с EXPLAIN ANALYZE.
- * ВАЖНО: EXPLAIN ANALYZE реально выполняет запрос, поэтому мы:
- * 1. Выполняем EXPLAIN ANALYZE для получения плана + времени
- * 2. Выполняем запрос ещё раз для получения данных
- * Это неизбежно, но мы кешируем результаты одинаковых запросов на короткое время.
+ * <p>
+ * Поддерживает:
+ * <ul>
+ *   <li>Одиночные SELECT запросы</li>
+ *   <li>Несколько SELECT запросов через ; (выполняется последний)</li>
+ *   <li>Кеширование результатов на 30 секунд</li>
+ * </ul>
+ * </p>
  */
 public class QueryExecutor {
     private static final Logger log = LoggerFactory.getLogger(QueryExecutor.class);
 
-    // Простой кеш результатов (TTL 30 секунд)
+    /** Кеш результатов (TTL 30 секунд) */
     private static final Map<String, QueryResult> cache = new ConcurrentHashMap<>();
     private static final long CACHE_TTL_MS = 30_000;
 
-    // Планировщик для периодической очистки кеша
+    /** Планировщик для периодической очистки кеша */
     private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     static {
-        // Запускаем периодическую очистку кеша каждую минуту
+        // Периодическая очистка кеша каждую минуту
         scheduler.scheduleAtFixedRate(() -> {
             int sizeBefore = cache.size();
             cache.entrySet().removeIf(entry ->
@@ -40,7 +44,7 @@ public class QueryExecutor {
             }
         }, 1, 1, TimeUnit.MINUTES);
 
-        // Добавляем shutdown hook для корректного завершения планировщика
+        // Shutdown hook для планировщика
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             scheduler.shutdown();
             try {
@@ -63,7 +67,6 @@ public class QueryExecutor {
         private boolean success;
         private int rowCount;
 
-        // Геттеры и сеттеры
         public List<String> getColumns() { return columns; }
         public void setColumns(List<String> columns) { this.columns = columns; }
 
@@ -92,7 +95,13 @@ public class QueryExecutor {
     }
 
     /**
-     * Выполнить запрос от имени студента
+     * Выполнить запрос от имени студента.
+     * Поддерживает несколько SELECT запросов, разделённых точкой с запятой.
+     * Возвращает результат последнего SELECT запроса.
+     *
+     * @param dbName имя базы данных
+     * @param sql    SQL запрос (может содержать несколько SELECT через ;)
+     * @return результат выполнения
      */
     public static QueryResult executeAsStudent(String dbName, String sql) {
         // Валидация
@@ -101,22 +110,49 @@ public class QueryExecutor {
         }
 
         String sqlTrimmed = sql.trim();
-        String sqlLower = sqlTrimmed.toLowerCase();
 
-        if (!sqlLower.startsWith("select")) {
-            return errorResult("Only SELECT queries are allowed");
+        // Разбиваем запрос на отдельные statements
+        String[] statements = sqlTrimmed.split(";");
+
+        // Ищем последний SELECT запрос (игнорируем пустые и не-SELECT)
+        String lastSelect = null;
+        for (String stmt : statements) {
+            String trimmed = stmt.trim();
+            if (!trimmed.isEmpty() && trimmed.toLowerCase().startsWith("select")) {
+                lastSelect = trimmed;
+            }
         }
+
+        if (lastSelect == null) {
+            return errorResult("No SELECT query found. Only SELECT queries are allowed.");
+        }
+
+        // Если был только один запрос или несколько, но последний SELECT
+        if (statements.length > 1) {
+            log.info("Multiple statements detected, executing only the last SELECT: {}",
+                    lastSelect.length() > 100 ? lastSelect.substring(0, 100) + "..." : lastSelect);
+        }
+
+        // Выполняем последний SELECT запрос
+        return executeSingleQuery(dbName, lastSelect);
+    }
+
+    /**
+     * Выполняет один SELECT запрос
+     */
+    private static QueryResult executeSingleQuery(String dbName, String sql) {
+        String sqlLower = sql.toLowerCase();
 
         // Защита от опасных конструкций
         if (containsDangerousPatterns(sqlLower)) {
             log.warn("Blocked potentially dangerous query: {}", sql);
-            return errorResult("Query contains prohibited patterns (subqueries with DELETE/UPDATE, etc.)");
+            return errorResult("Query contains prohibited patterns (DELETE, UPDATE, DROP, etc.)");
         }
 
         // Проверяем кеш
-        String cacheKey = dbName + ":" + sqlTrimmed;
+        String cacheKey = dbName + ":" + sql;
         QueryResult cached = cache.get(cacheKey);
-        if (cached != null && (System.currentTimeMillis() - cached.executionTimeMs) < CACHE_TTL_MS) {
+        if (cached != null && (System.currentTimeMillis() - cached.getExecutionTimeMs()) < CACHE_TTL_MS) {
             log.debug("Returning cached result for: {}", cacheKey);
             return cached;
         }
@@ -127,35 +163,36 @@ public class QueryExecutor {
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.STUDENT, dbName);
              Statement stmt = conn.createStatement()) {
 
-            // Лимиты через JDBC (дополнительная защита)
+            // Лимиты через JDBC
             stmt.setQueryTimeout(DatabaseConfig.getQueryTimeout());
             stmt.setMaxRows(DatabaseConfig.getMaxRows());
 
-            // Получаем план выполнения (EXPLAIN ANALYZE реально выполняет запрос)
-            String explainPlan = getExplainPlan(stmt, sqlTrimmed);
+            // Получаем план выполнения
+            String explainPlan = getExplainPlan(stmt, sql);
             result.setExplain(explainPlan);
 
-            // Получаем данные (запрос выполняется второй раз)
-            ResultSet rs = stmt.executeQuery(sqlTrimmed);
-            ResultSetMetaData meta = rs.getMetaData();
-            int columnCount = meta.getColumnCount();
+            // Получаем данные
+            try (ResultSet rs = stmt.executeQuery(sql)) {
+                ResultSetMetaData meta = rs.getMetaData();
+                int columnCount = meta.getColumnCount();
 
-            List<String> columns = new ArrayList<>();
-            for (int i = 1; i <= columnCount; i++) {
-                columns.add(meta.getColumnName(i));
-            }
-            result.setColumns(columns);
-
-            List<Map<String, Object>> rows = new ArrayList<>();
-            while (rs.next()) {
-                Map<String, Object> row = new LinkedHashMap<>();
+                List<String> columns = new ArrayList<>();
                 for (int i = 1; i <= columnCount; i++) {
-                    row.put(meta.getColumnName(i), rs.getObject(i));
+                    columns.add(meta.getColumnName(i));
                 }
-                rows.add(row);
+                result.setColumns(columns);
+
+                List<Map<String, Object>> rows = new ArrayList<>();
+                while (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (int i = 1; i <= columnCount; i++) {
+                        row.put(meta.getColumnName(i), rs.getObject(i));
+                    }
+                    rows.add(row);
+                }
+                result.setRows(rows);
+                result.setSuccess(true);
             }
-            result.setRows(rows);
-            result.setSuccess(true);
 
             long executionTime = System.currentTimeMillis() - startTime;
             result.setExecutionTimeMs(executionTime);
@@ -164,7 +201,7 @@ public class QueryExecutor {
             cache.put(cacheKey, result);
 
             log.info("Query executed: {} rows in {} ms on database {}",
-                    rows.size(), executionTime, dbName);
+                    result.getRowCount(), executionTime, dbName);
 
         } catch (SQLException e) {
             String errorMsg = handleSQLError(e);
@@ -221,6 +258,9 @@ public class QueryExecutor {
         }
         if (msg.contains("syntax error")) {
             return "SQL syntax error: " + e.getMessage();
+        }
+        if (msg.contains("multiple resultsets")) {
+            return "Multiple queries detected. Only the last SELECT query will be executed.";
         }
         return e.getMessage();
     }

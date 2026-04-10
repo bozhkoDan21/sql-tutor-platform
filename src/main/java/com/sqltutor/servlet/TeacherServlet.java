@@ -394,6 +394,7 @@ public class TeacherServlet extends HttpServlet {
      * <p>
      * Перед удалением завершает все активные подключения к этой базе,
      * чтобы избежать ошибки "database is being accessed by other users".
+     * После удаления закрывает пулы соединений для этой базы.
      * </p>
      *
      * @param conn     соединение с БД (под ролью администратора)
@@ -429,6 +430,11 @@ public class TeacherServlet extends HttpServlet {
             // Удаляем базу с экранированием имени
             String dropSql = String.format("DROP DATABASE IF EXISTS %s", dbName);
             stmt.executeUpdate(dropSql);
+
+            // Закрываем пулы соединений для удалённой базы
+            DatabaseConfig.closeStudentPool(dbName);
+            DatabaseConfig.closeTeacherPool(dbName);
+
             response.put("success", true);
             response.put("message", "Database '" + dbName + "' deleted");
 
