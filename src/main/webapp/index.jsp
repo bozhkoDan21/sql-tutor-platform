@@ -22,11 +22,8 @@
             </div>
             <div class="nav-right">
                 <a href="index.jsp" class="nav-link active">Студент</a>
-                <a href="teacher.jsp" class="nav-link">Преподаватель</a>
-
-                <% if (session != null && "teacher".equals(session.getAttribute("role"))) { %>
-                    <a href="logout" class="nav-link" style="background: rgba(255,255,255,0.2);">Выйти</a>
-                <% } %>
+                <a href="teacher.jsp" id="teacherLink" class="nav-link" style="display: none;">Преподаватель</a>
+                <a href="#" id="logoutBtn" class="nav-link" style="background: rgba(255,255,255,0.2);">Выйти</a>
             </div>
         </div>
     </nav>
@@ -80,86 +77,36 @@
                 <!-- Блок подсказок -->
                 <div class="card hints-card">
                     <h3 class="card-title">
-                        <span class="icon">💡</span>
-                        Подсказки
+                        <span class="icon">⌨️</span>
+                        Горячие клавиши
                     </h3>
 
                     <div class="hints-container">
                         <details class="hint-details">
-                            <summary class="hint-summary">📖 Базовые команды SQL</summary>
+                            <summary class="hint-summary">
+                                <span class="summary-icon">▶</span>
+                                Показать горячие клавиши
+                            </summary>
                             <div class="hint-content">
-                                <pre><code>SELECT * FROM student;                    -- все записи из таблицы
-SELECT name, age FROM student;            -- только нужные колонки
-SELECT * FROM student LIMIT 10;           -- первые 10 записей
-SELECT * FROM student WHERE age > 18;     -- фильтрация
-SELECT * FROM student ORDER BY name;      -- сортировка</code></pre>
-                            </div>
-                        </details>
-
-                        <details class="hint-details">
-                            <summary class="hint-summary">🔍 Фильтрация (WHERE)</summary>
-                            <div class="hint-content">
-                                <pre><code>WHERE age > 18                           -- больше
-WHERE age BETWEEN 18 AND 25               -- между
-WHERE name LIKE 'Ива%'                    -- начинается с "Ива"
-WHERE city IN ('Москва', 'СПб')           -- из списка
-WHERE age IS NULL                         -- пустые значения
-WHERE age > 18 AND city = 'Москва'        -- несколько условий</code></pre>
-                            </div>
-                        </details>
-
-                        <details class="hint-details">
-                            <summary class="hint-summary">📊 Агрегатные функции</summary>
-                            <div class="hint-content">
-                                <pre><code>SELECT COUNT(*) FROM student;             -- количество записей
-SELECT AVG(age) FROM student;             -- среднее значение
-SELECT SUM(scholarship) FROM enrollment;  -- сумма
-SELECT MAX(age), MIN(age) FROM student;   -- максимум и минимум
-SELECT faculty_id, COUNT(*) FROM student
-GROUP BY faculty_id;                      -- группировка</code></pre>
-                            </div>
-                        </details>
-
-                        <details class="hint-details">
-                            <summary class="hint-summary">🔗 JOIN (объединение таблиц)</summary>
-                            <div class="hint-content">
-                                <pre><code>-- INNER JOIN (только совпадающие записи)
-SELECT s.full_name, e.year_of_enrollment
-FROM student s
-JOIN enrollment e ON s.id = e.student_id;
-
--- LEFT JOIN (все студенты, даже без зачисления)
-SELECT s.full_name, e.year_of_enrollment
-FROM student s
-LEFT JOIN enrollment e ON s.id = e.student_id;</code></pre>
-                            </div>
-                        </details>
-
-                        <details class="hint-details">
-                            <summary class="hint-summary">⌨️ Горячие клавиши</summary>
-                            <div class="hint-content">
-                                <pre><code>Ctrl + Enter      → Выполнить запрос
-Ctrl + Space      → Автодополнение (таблицы, колонки)
-Ctrl + Shift + F  → Форматировать SQL
-Tab               → Отступ (4 пробела)</code></pre>
-                            </div>
-                        </details>
-
-                        <details class="hint-details">
-                            <summary class="hint-summary">⚠️ Частые ошибки и их решение</summary>
-                            <div class="hint-content">
-                                <ul>
-                                    <li><strong>Ошибка синтаксиса</strong> → Проверьте запятые и кавычки</li>
-                                    <li><strong>Колонка не существует</strong> → Проверьте название колонки</li>
-                                    <li><strong>Таблица не существует</strong> → Выберите правильную базу данных</li>
-                                    <li><strong>Таймаут запроса</strong> → Добавьте LIMIT или оптимизируйте запрос</li>
-                                    <li><strong>Не хватает прав</strong> → Разрешены только SELECT запросы</li>
-                                </ul>
+                                <div class="hotkeys-grid">
+                                    <div class="hotkey-item">
+                                        <span class="hotkey-key">Ctrl + Enter</span>
+                                        <span class="hotkey-desc">Выполнить запрос</span>
+                                    </div>
+                                    <div class="hotkey-item">
+                                        <span class="hotkey-key">Ctrl + Space</span>
+                                        <span class="hotkey-desc">Автодополнение (таблицы, колонки)</span>
+                                    </div>
+                                    <div class="hotkey-item">
+                                        <span class="hotkey-key">Tab</span>
+                                        <span class="hotkey-desc">Отступ (4 пробела)</span>
+                                    </div>
+                                </div>
                             </div>
                         </details>
                     </div>
                 </div>
-            </div>
+            </div>  <!-- Закрывающий тег left-column -->
 
             <!-- Правая колонка: редактор SQL -->
             <div class="right-column">
@@ -214,7 +161,7 @@ Tab               → Отступ (4 пробела)</code></pre>
                     </div>
                 </div>
             </div>
-        </div>
+        </div>  <!-- Закрывающий тег two-columns -->
     </main>
 
     <!-- CodeMirror JS -->
@@ -226,5 +173,51 @@ Tab               → Отступ (4 пробела)</code></pre>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 
     <script src="script.js"></script>
+
+    <script>
+        // Проверка авторизации при загрузке страницы
+        (function checkAuth() {
+            const token = localStorage.getItem('accessToken');
+            const user = localStorage.getItem('user');
+
+            if (!token || !user) {
+                window.location.href = '/login.jsp';
+                return;
+            }
+            // Убираем проверку роли — студент или преподаватель, оба могут выполнять SQL
+        })();
+
+        // Показываем вкладку преподавателя только если роль teacher
+        (function showTeacherTab() {
+            const user = localStorage.getItem('user');
+            if (user) {
+                try {
+                    const userData = JSON.parse(user);
+                    if (userData.role === 'teacher') {
+                        const teacherLink = document.getElementById('teacherLink');
+                        if (teacherLink) {
+                            teacherLink.style.display = 'inline-block';
+                        }
+                    }
+                } catch(e) {}
+            }
+        })();
+
+        // Кнопка выхода
+        document.getElementById('logoutBtn')?.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+                try {
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                } catch(e) {}
+            }
+            localStorage.clear();
+            window.location.href = '/login.jsp';
+        });
+    </script>
 </body>
 </html>

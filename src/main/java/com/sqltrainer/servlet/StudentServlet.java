@@ -1,7 +1,6 @@
-package com.sqltutor.servlet;
+package com.sqltrainer.servlet;
 
-import com.sqltutor.config.DatabaseConfig;
-import com.sqltutor.util.QueryExecutor;
+import com.sqltrainer.util.QueryExecutor;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +12,6 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.util.Date;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @WebServlet("/api/execute")

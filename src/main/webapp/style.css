@@ -180,6 +180,7 @@ body {
     gap: 0.75rem;
 }
 
+/* Раскрывающийся блок с анимацией */
 .hint-details {
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -208,42 +209,23 @@ body {
     color: var(--primary);
 }
 
+.hint-summary .summary-icon {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    font-size: 0.8rem;
+    margin-right: 0.5rem;
+}
+
+.hint-details[open] .hint-summary .summary-icon {
+    transform: rotate(90deg);
+}
+
 .hint-content {
     padding: 1rem;
     font-size: 0.85rem;
     border-top: 1px solid var(--border);
     background: #1a1a1a;
     border-radius: 0 0 var(--radius) var(--radius);
-}
-
-.hint-content pre {
-    margin: 0;
-    color: #4ade80;
-    font-family: 'Courier New', monospace;
-    font-size: 0.8rem;
-    overflow-x: auto;
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-.hint-content code {
-    color: #4ade80;
-    font-family: 'Courier New', monospace;
-}
-
-.hint-content ul {
-    margin: 0;
-    padding-left: 1.5rem;
-    color: #f8f8f2;
-}
-
-.hint-content li {
-    margin: 0.5rem 0;
-    color: #f8f8f2;
-}
-
-.hint-content li strong {
-    color: #f59e0b;
 }
 
 /* Улучшенный блок информации о БД */
@@ -299,21 +281,22 @@ body {
     font-size: 1.1rem;
 }
 
+/* Список таблиц - улучшенный вид с переносом длинных названий */
 .tables-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 0.5rem;
-    max-height: 300px;
+    max-height: 350px;
     overflow-y: auto;
     padding-right: 0.25rem;
 }
 
 .tables-grid li {
     list-style: none;
-    padding: 0.5rem 0.75rem;
+    padding: 0.6rem 0.8rem;
     background: var(--light);
-    border-radius: 0.5rem;
-    font-size: 0.9rem;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
     font-family: 'Courier New', monospace;
     border: 1px solid var(--border);
     transition: all 0.2s;
@@ -321,20 +304,25 @@ body {
     align-items: center;
     gap: 0.5rem;
     cursor: pointer;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+    line-height: 1.4;
 }
 
 .tables-grid li:hover {
     background: var(--primary);
     border-color: var(--primary);
     color: white;
-    transform: translateX(4px);
-    box-shadow: 0 4px 8px rgba(79, 70, 229, 0.2);
+    transform: translateX(2px);
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.15);
 }
 
 .tables-grid li::before {
-    content: '📊';
-    font-size: 0.85rem;
+    content: '📋';
+    font-size: 0.9rem;
     opacity: 0.7;
+    flex-shrink: 0;
 }
 
 .tables-grid li:hover::before {
@@ -477,7 +465,7 @@ body {
     border-radius: 2rem;
 }
 
-/* Результаты запроса - улучшенная таблица */
+/* Результаты запроса */
 .results-section {
     margin-bottom: 1rem;
 }
@@ -501,15 +489,6 @@ body {
     background: var(--light);
     padding: 0.25rem 0.75rem;
     border-radius: 2rem;
-}
-
-.results-table {
-    overflow-x: auto;
-    border: 2px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--white);
-    max-height: 400px;
-    overflow-y: auto;
 }
 
 .empty-state {
@@ -873,6 +852,20 @@ li.CodeMirror-hint-active {
     .editor-toolbar {
         flex-wrap: wrap;
     }
+
+    .hotkey-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .hotkey-key {
+        font-size: 0.8rem;
+    }
+
+    .hotkey-desc {
+        font-size: 0.85rem;
+    }
 }
 
 /* Анимации */
@@ -934,6 +927,49 @@ li.CodeMirror-hint-active {
     color: white;
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
+/* ============================================ */
+/* Горячие клавиши - красивый блок */
+/* ============================================ */
+
+.hotkeys-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.hotkey-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: #2a2a2a;
+    border-radius: var(--radius);
+    border: 1px solid #3a3a3a;
+    transition: all 0.2s;
+}
+
+.hotkey-item:hover {
+    background: #333;
+    border-color: var(--primary);
+    transform: translateX(4px);
+}
+
+.hotkey-key {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    font-size: 0.9rem;
+    background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 2rem;
+    letter-spacing: 0.5px;
+}
+
+.hotkey-desc {
+    color: #e0e0e0;
+    font-size: 0.9rem;
 }
 
 /* Утилиты */

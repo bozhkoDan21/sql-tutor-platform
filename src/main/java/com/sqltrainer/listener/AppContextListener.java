@@ -1,6 +1,6 @@
-package com.sqltutor.listener;
+package com.sqltrainer.listener;
 
-import com.sqltutor.config.DatabaseConfig;
+import com.sqltrainer.config.DatabaseConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

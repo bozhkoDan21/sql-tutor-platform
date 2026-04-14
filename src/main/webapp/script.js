@@ -10,6 +10,21 @@ let sqlKeywords = [
     'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'DISTINCT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'
 ];
 
+/**
+ * Получает токен из localStorage
+ */
+function getAuthToken() {
+    return localStorage.getItem('accessToken');
+}
+
+/**
+ * Возвращает заголовки с авторизацией
+ */
+function getAuthHeaders() {
+    const token = getAuthToken();
+    return token ? { 'Authorization': 'Bearer ' + token } : {};
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const executeBtn = document.getElementById('executeBtn');
     const clearBtn = document.getElementById('clearBtn');
@@ -21,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const explainContainer = document.getElementById('explainContainer');
     const dbSelector = document.getElementById('dbSelector');
 
-    // Инициализация CodeMirror с расширенными настройками
+    // Инициализация CodeMirror
     const textarea = document.getElementById('sqlQuery');
     if (textarea) {
         sqlEditor = CodeMirror.fromTextArea(textarea, {
@@ -44,7 +59,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Настраиваем кастомное автодополнение
         sqlEditor.setOption('hintOptions', {
             hint: customSqlHint,
             completeSingle: false,
@@ -78,9 +92,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     loadDatabases();
 
-    /**
-     * Форматирует текущий запрос в редакторе и устанавливает его обратно
-     */
     function formatQueryAndSet() {
         if (sqlEditor) {
             const currentQuery = sqlEditor.getValue();
@@ -92,11 +103,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    /**
-     * Кастомное автодополнение для SQL
-     * @param {CodeMirror} cm - редактор
-     * @returns {Object} список подсказок
-     */
     function customSqlHint(cm) {
         const cursor = cm.getCursor();
         const token = cm.getTokenAt(cursor);
@@ -107,7 +113,6 @@ document.addEventListener('DOMContentLoaded', function() {
         let from = { line: cursor.line, ch: token.start };
         let to = { line: cursor.line, ch: token.end };
 
-        // Определяем контекст для умных подсказок
         const afterFromMatch = textBeforeCursor.match(/FROM\s+$/i);
         const afterJoinMatch = textBeforeCursor.match(/JOIN\s+$/i);
         const afterSelectMatch = textBeforeCursor.match(/SELECT\s+$/i);
@@ -115,10 +120,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const afterTableDot = textBeforeCursor.match(/(\w+)\.$/i);
 
         if (afterFromMatch || afterJoinMatch) {
-            // После FROM или JOIN — подсказываем таблицы
             hints = currentTables;
         } else if (afterSelectMatch) {
-            // После SELECT — подсказываем колонки из всех таблиц
             const allColumns = [];
             for (const table in currentTablesWithColumns) {
                 if (currentTablesWithColumns[table]) {
@@ -130,7 +133,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             hints = [...new Set([...allColumns, ...sqlKeywords])];
         } else if (afterWhereMatch) {
-            // После WHERE — подсказываем колонки
             const allColumns = [];
             for (const table in currentTablesWithColumns) {
                 if (currentTablesWithColumns[table]) {
@@ -142,7 +144,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             hints = [...new Set([...allColumns, ...sqlKeywords])];
         } else if (afterTableDot) {
-            // После table. — подсказываем колонки этой таблицы
             const tableName = afterTableDot[1];
             if (currentTablesWithColumns[tableName]) {
                 hints = currentTablesWithColumns[tableName];
@@ -150,11 +151,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 hints = sqlKeywords;
             }
         } else {
-            // Стандартные подсказки — ключевые слова + таблицы
             hints = [...sqlKeywords, ...currentTables];
         }
 
-        // Фильтруем по введённому тексту
         const currentWord = token.string;
         if (currentWord) {
             hints = hints.filter(h => h.toLowerCase().startsWith(currentWord.toLowerCase()));
@@ -167,17 +166,11 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
 
-    /**
-     * Форматирование SQL запроса (автоисправление)
-     * @param {string} query - исходный запрос
-     * @returns {string} отформатированный запрос
-     */
     function formatQuery(query) {
         if (!query) return '';
 
         let formatted = query;
 
-        // 1. Исправляем регистр ключевых слов
         formatted = formatted.replace(/\bselect\b/gi, 'SELECT');
         formatted = formatted.replace(/\bfrom\b/gi, 'FROM');
         formatted = formatted.replace(/\bwhere\b/gi, 'WHERE');
@@ -202,16 +195,9 @@ document.addEventListener('DOMContentLoaded', function() {
         formatted = formatted.replace(/\bas\b/gi, 'AS');
         formatted = formatted.replace(/\bon\b/gi, 'ON');
 
-        // 2. Исправляем SELECT* -> SELECT *
         formatted = formatted.replace(/SELECT\*/gi, 'SELECT *');
-
-        // 3. Добавляем пробел после запятой
         formatted = formatted.replace(/,([^\s])/g, ', $1');
-
-        // 4. Удаляем лишние пробелы
         formatted = formatted.replace(/\s+/g, ' ');
-
-        // 5. Добавляем переносы после ключевых слов (опционально)
         formatted = formatted.replace(/FROM/g, '\nFROM');
         formatted = formatted.replace(/WHERE/g, '\nWHERE');
         formatted = formatted.replace(/JOIN/g, '\nJOIN');
@@ -220,23 +206,13 @@ document.addEventListener('DOMContentLoaded', function() {
         formatted = formatted.replace(/GROUP BY/g, '\nGROUP BY');
         formatted = formatted.replace(/ORDER BY/g, '\nORDER BY');
 
-        // 6. Убираем лишние переносы в начале
-        formatted = formatted.trim();
-
-        return formatted;
+        return formatted.trim();
     }
 
-    /**
-     * Анализ ошибки и генерация подсказок
-     * @param {string} query - запрос, который вызвал ошибку
-     * @param {string} errorMessage - сообщение об ошибке
-     * @returns {string} подсказка для студента
-     */
     function getErrorHint(query, errorMessage) {
         const lowerError = errorMessage.toLowerCase();
         const suggestions = [];
 
-        // Синтаксические ошибки
         if (lowerError.includes('syntax error')) {
             if (query.match(/SELECT\s+\w+\s+FROM/i) && !query.match(/SELECT\s+\w+,\s+\w+\s+FROM/i)) {
                 suggestions.push('💡 Возможно, пропущена запятая между колонками. Пример: SELECT id, name FROM table');
@@ -252,14 +228,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Ошибка "колонка не существует"
         if (lowerError.includes('column') && lowerError.includes('does not exist')) {
             const columnMatch = errorMessage.match(/"([^"]+)"/);
             if (columnMatch) {
                 const columnName = columnMatch[1];
                 suggestions.push(`💡 Колонка "${columnName}" не существует. Проверьте название колонки.`);
 
-                // Поиск похожих колонок
                 const allColumns = [];
                 for (const table in currentTablesWithColumns) {
                     if (currentTablesWithColumns[table]) {
@@ -278,7 +252,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Ошибка "таблица не существует"
         if (lowerError.includes('relation') && lowerError.includes('does not exist')) {
             const tableMatch = errorMessage.match(/"([^"]+)"/);
             if (tableMatch) {
@@ -290,12 +263,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Ошибка "не хватает прав"
         if (lowerError.includes('permission denied')) {
             suggestions.push('💡 У вас нет прав на выполнение этой операции. Разрешены только SELECT запросы.');
         }
 
-        // Ошибка таймаута
         if (lowerError.includes('timeout')) {
             suggestions.push('💡 Запрос выполняется слишком долго. Попробуйте добавить LIMIT или оптимизировать запрос.');
         }
@@ -307,10 +278,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return suggestions.join('\n');
     }
 
-    /**
-     * Получает запрос для выполнения с автоисправлением
-     * @returns {string} исправленный SQL запрос
-     */
     function getQueryToExecute() {
         let query = '';
 
@@ -337,13 +304,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        // Автоисправление запроса
         return formatQuery(query);
     }
 
     function loadDatabases() {
-        fetch('/api/databases')
-            .then(response => response.json())
+        const token = getAuthToken();
+        fetch('/api/databases', {
+            headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+        })
+            .then(response => {
+                if (response.status === 401) {
+                    window.location.href = '/login.jsp';
+                    throw new Error('Unauthorized');
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success && data.databases && data.databases.length > 0) {
                     dbSelector.innerHTML = '<option value="">Выберите базу данных</option>';
@@ -376,7 +351,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function loadTableColumns(dbName, tableName) {
         try {
-            const response = await fetch(`/api/columns?db=${encodeURIComponent(dbName)}&table=${encodeURIComponent(tableName)}`);
+            const token = getAuthToken();
+            const response = await fetch(`/api/columns?db=${encodeURIComponent(dbName)}&table=${encodeURIComponent(tableName)}`, {
+                headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+            });
             const data = await response.json();
             if (data.success) {
                 currentTablesWithColumns[tableName] = data.columns;
@@ -414,17 +392,25 @@ document.addEventListener('DOMContentLoaded', function() {
         resultContainer.innerHTML = '<div class="empty-state">⏳ Выполнение запроса...</div>';
         explainContainer.innerHTML = '-- Получение плана выполнения...';
 
+        const token = getAuthToken();
         fetch('/api/execute', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': token ? 'Bearer ' + token : ''
             },
             body: new URLSearchParams({
                 'database': selectedDb,
                 'query': query
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (response.status === 401) {
+                window.location.href = '/login.jsp';
+                throw new Error('Unauthorized');
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.error) {
                 const hint = getErrorHint(query, data.error);
@@ -514,17 +500,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
         resultContainer.innerHTML = '<div class="empty-state">⏳ Подготовка файла...</div>';
 
+        const token = getAuthToken();
         fetch('/api/execute', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': token ? 'Bearer ' + token : ''
             },
             body: new URLSearchParams({
                 'database': selectedDb,
                 'query': query
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (response.status === 401) {
+                window.location.href = '/login.jsp';
+                throw new Error('Unauthorized');
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.error) {
                 resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка: ${data.error}</div>`;
@@ -619,8 +613,10 @@ function loadDbInfo(dbName) {
 
     currentDbRequest = new AbortController();
 
+    const token = getAuthToken();
     fetch('/api/dbinfo?db=' + encodeURIComponent(dbName), {
-        signal: currentDbRequest.signal
+        signal: currentDbRequest.signal,
+        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
     })
         .then(response => {
             if (!response.ok) {
@@ -645,7 +641,6 @@ function loadDbInfo(dbName) {
                         tablesList.appendChild(li);
                     });
 
-                    // Загружаем колонки для всех таблиц
                     await loadAllTableColumns(dbName, currentTables);
                 } else {
                     tablesList.innerHTML = '<li style="grid-column: 1/-1; text-align: center;">📭 Нет таблиц</li>';
@@ -670,7 +665,10 @@ function loadDbInfo(dbName) {
 async function loadAllTableColumns(dbName, tables) {
     for (const table of tables) {
         try {
-            const response = await fetch(`/api/columns?db=${encodeURIComponent(dbName)}&table=${encodeURIComponent(table)}`);
+            const token = getAuthToken();
+            const response = await fetch(`/api/columns?db=${encodeURIComponent(dbName)}&table=${encodeURIComponent(table)}`, {
+                headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+            });
             const data = await response.json();
             if (data.success) {
                 window.currentTablesWithColumns = window.currentTablesWithColumns || {};

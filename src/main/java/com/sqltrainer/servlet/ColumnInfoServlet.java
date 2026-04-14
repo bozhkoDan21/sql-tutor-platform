@@ -1,6 +1,6 @@
-package com.sqltutor.servlet;
+package com.sqltrainer.servlet;
 
-import com.sqltutor.config.DatabaseConfig;
+import com.sqltrainer.config.DatabaseConfig;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
