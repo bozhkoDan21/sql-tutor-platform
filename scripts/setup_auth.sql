@@ -2,6 +2,10 @@
 -- СКРИПТ НАСТРОЙКИ АВТОРИЗАЦИИ (Единая таблица users)
 -- ============================================
 
+-- Устанавливаем кодировку
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+
 -- Удаляем старые таблицы (если есть)
 DROP TABLE IF EXISTS refresh_tokens CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
@@ -16,9 +20,8 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     full_name VARCHAR(255),
-    role VARCHAR(20) NOT NULL DEFAULT 'student', -- 'student' or 'teacher'
+    role VARCHAR(20) NOT NULL DEFAULT 'student',
     group_name VARCHAR(100),
-    avatar_url TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -54,11 +57,10 @@ CREATE TABLE action_logs (
 -- ============================================
 -- ВСТАВКА ПРЕПОДАВАТЕЛЯ ПО УМОЛЧАНИЮ
 -- Пароль: teacher123
--- Хеш сгенерирован Java BCrypt (cost factor 10)
 -- ============================================
 
-INSERT INTO users (login, password_hash, full_name, email, role)
-VALUES ('teacher', '$2a$10$L/3Cg8KvdHuq5Ti4t0ZrzOYylUp0G6WpCcLmhqc0Ea.lAU3GJITOO', 'Преподаватель', 'teacher@sqltrainer.com', 'teacher')
+INSERT INTO users (login, password_hash, full_name, email, role, is_active)
+VALUES ('teacher', '$2a$10$L/3Cg8KvdHuq5Ti4t0ZrzOYylUp0G6WpCcLmhqc0Ea.lAU3GJITOO', 'Преподаватель', 'teacher@sqltrainer.com', 'teacher', true)
 ON CONFLICT (login) DO NOTHING;
 
 -- ============================================

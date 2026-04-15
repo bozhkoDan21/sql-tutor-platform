@@ -56,7 +56,6 @@ public class TeacherServlet extends HttpServlet {
                 handleDelete(conn, dbName, response);
 
             } else if ("sessions".equals(action)) {
-                // Получаем активные сессии через публичный метод
                 Map<String, StudentServlet.SessionInfo> sessions = StudentServlet.getActiveSessions();
                 response.put("sessions", new ArrayList<>(sessions.values()));
             } else {
@@ -74,6 +73,21 @@ public class TeacherServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         doPost(req, resp);
+    }
+
+    /**
+     * Безопасное экранирование имени базы данных с использованием quote_ident
+     */
+    private String quoteIdent(Connection conn, String identifier) throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement("SELECT quote_ident(?)")) {
+            stmt.setString(1, identifier);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString(1);
+                }
+            }
+        }
+        return identifier;
     }
 
     private void handleUpload(Connection conn, String dbName, Part filePart,
@@ -119,9 +133,14 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
-        // Создание базы данных
+        // Экранируем имя базы данных
+        String quotedDbName = quoteIdent(conn, dbName);
+
+        // Создание базы данных (безопасно через quote_ident)
         try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("CREATE DATABASE " + dbName + " OWNER teacher_role");
+            String createSql = "CREATE DATABASE " + quotedDbName + " OWNER teacher_role";
+            log.debug("Executing: {}", createSql);
+            stmt.executeUpdate(createSql);
         } catch (SQLException e) {
             log.error("Failed to create database: {}", dbName, e);
             response.put("error", "Failed to create database: " + e.getMessage());
@@ -138,7 +157,7 @@ public class TeacherServlet extends HttpServlet {
                 dbConn.commit();
             } catch (SQLException e) {
                 dbConn.rollback();
-                dropDatabase(conn, dbName);
+                dropDatabase(conn, quotedDbName, dbName);
                 log.error("Failed to execute SQL script on {}", dbName, e);
                 response.put("error", "Failed to execute SQL script: " + e.getMessage());
                 return;
@@ -146,7 +165,7 @@ public class TeacherServlet extends HttpServlet {
         }
 
         try {
-            grantStudentAccess(conn, dbName);
+            grantStudentAccess(conn, quotedDbName, dbName);
         } catch (SQLException e) {
             log.warn("Could not grant student access to {}: {}", dbName, e.getMessage());
         }
@@ -155,12 +174,6 @@ public class TeacherServlet extends HttpServlet {
         response.put("message", "Database '" + dbName + "' created successfully");
     }
 
-    /**
-     * Проверяет, имеет ли файл разрешённое расширение (.sql).
-     *
-     * @param fileName имя файла
-     * @return true, если расширение .sql, иначе false
-     */
     private boolean isValidFileExtension(String fileName) {
         if (fileName == null || fileName.isEmpty()) return false;
         int lastDot = fileName.lastIndexOf('.');
@@ -169,24 +182,10 @@ public class TeacherServlet extends HttpServlet {
         return ALLOWED_EXTENSIONS.contains(ext);
     }
 
-    /**
-     * Проверяет содержимое SQL-скрипта на наличие опасных команд.
-     * <p>
-     * Запрещённые команды: DROP DATABASE, DROP TABLE, DELETE FROM, TRUNCATE,
-     * ALTER SYSTEM, PG_SLEEP, COPY.
-     * </p>
-     * <p>
-     * Разрешённые команды: CREATE TABLE, INSERT INTO, CREATE DATABASE.
-     * </p>
-     *
-     * @param content содержимое SQL-скрипта
-     * @return true, если содержимое безопасно и содержит разрешённые команды
-     */
     private boolean isValidSqlContent(String content) {
         if (content == null || content.trim().isEmpty()) return false;
         String lower = content.toLowerCase();
 
-        // Запрещаем опасные команды
         List<String> dangerous = Arrays.asList(
                 "drop database", "drop table", "delete from", "truncate",
                 "alter system", "pg_sleep", "copy"
@@ -200,15 +199,8 @@ public class TeacherServlet extends HttpServlet {
                 lower.contains("create database");
     }
 
-    /**
-     * Проверяет существование базы данных с указанным именем.
-     *
-     * @param conn   соединение с БД (под ролью администратора)
-     * @param dbName имя базы данных для проверки
-     * @return true, если база данных существует
-     * @throws SQLException при ошибках выполнения запроса
-     */
     private boolean databaseExists(Connection conn, String dbName) throws SQLException {
+        // Используем PreparedStatement - это безопасно
         String sql = "SELECT 1 FROM pg_database WHERE datname = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, dbName);
@@ -218,50 +210,32 @@ public class TeacherServlet extends HttpServlet {
         }
     }
 
-    /**
-     * Удаляет базу данных (вызывается при откате транзакции).
-     *
-     * @param conn   соединение с БД (под ролью администратора)
-     * @param dbName имя удаляемой базы данных
-     * @throws SQLException при ошибках выполнения
-     */
-    private void dropDatabase(Connection conn, String dbName) throws SQLException {
+    private void dropDatabase(Connection conn, String quotedDbName, String originalDbName) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("DROP DATABASE IF EXISTS " + dbName);
+            String dropSql = "DROP DATABASE IF EXISTS " + quotedDbName;
+            log.debug("Executing: {}", dropSql);
+            stmt.executeUpdate(dropSql);
+        } catch (SQLException e) {
+            log.error("Failed to drop database: {}", originalDbName, e);
+            throw e;
         }
     }
 
-    /**
-     * Предоставляет студентам права на чтение созданной базы данных.
-     * <p>
-     * Выполняет:
-     * <ul>
-     *   <li>GRANT CONNECT ON DATABASE — разрешает подключение</li>
-     *   <li>ALTER DEFAULT PRIVILEGES — новые таблицы автоматически доступны для чтения</li>
-     * </ul>
-     * </p>
-     *
-     * @param conn   соединение с БД (под ролью администратора)
-     * @param dbName имя базы данных
-     * @throws SQLException при ошибках выполнения
-     */
-    private void grantStudentAccess(Connection conn, String dbName) throws SQLException {
+    private void grantStudentAccess(Connection conn, String quotedDbName, String originalDbName) throws SQLException {
+        // GRANT CONNECT с экранированным именем
         try (Statement stmt = conn.createStatement()) {
-            stmt.executeUpdate("GRANT CONNECT ON DATABASE " + dbName + " TO students");
+            String grantConnectSql = "GRANT CONNECT ON DATABASE " + quotedDbName + " TO students";
+            log.debug("Executing: {}", grantConnectSql);
+            stmt.executeUpdate(grantConnectSql);
         }
-        try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, dbName);
+
+        // ALTER DEFAULT PRIVILEGES для схемы public
+        try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, originalDbName);
              Statement stmt = dbConn.createStatement()) {
             stmt.executeUpdate("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO students");
         }
     }
 
-    /**
-     * Читает содержимое загруженного SQL-файла в строку.
-     *
-     * @param filePart часть multipart-запроса с файлом
-     * @return содержимое файла в виде строки
-     * @throws IOException при ошибках чтения файла
-     */
     private String readSqlScript(Part filePart) throws IOException {
         StringBuilder script = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
@@ -281,7 +255,6 @@ public class TeacherServlet extends HttpServlet {
         int queryCount = 0;
         int totalQueries = 0;
 
-        // Подсчёт запросов
         for (String line : lines) {
             String trimmed = line.trim();
             if (!trimmed.isEmpty() && !trimmed.startsWith("--") &&
@@ -343,13 +316,6 @@ public class TeacherServlet extends HttpServlet {
         LogStreamServlet.addLog("{\"type\":\"complete\",\"message\":\"Script execution completed\"}");
     }
 
-    /**
-     * Получает список всех пользовательских баз данных.
-     *
-     * @param conn соединение с БД (под ролью преподавателя)
-     * @return список имён баз данных
-     * @throws SQLException при ошибках выполнения запроса
-     */
     private List<String> getDatabaseList(Connection conn) throws SQLException {
         List<String> databases = new ArrayList<>();
         String sql = "SELECT datname FROM pg_database " +
@@ -366,16 +332,6 @@ public class TeacherServlet extends HttpServlet {
         return databases;
     }
 
-    /**
-     * Извлекает имя файла из заголовка Content-Disposition.
-     * <p>
-     * Поддерживает форматы как с полным путём (C:\folder\file.sql),
-     * так и просто с именем файла (file.sql).
-     * </p>
-     *
-     * @param part часть multipart-запроса
-     * @return имя файла или null, если не найдено
-     */
     private String getFileName(Part part) {
         String contentDisposition = part.getHeader("content-disposition");
         if (contentDisposition != null) {
@@ -389,18 +345,6 @@ public class TeacherServlet extends HttpServlet {
         return null;
     }
 
-    /**
-     * Удаляет указанную базу данных.
-     * <p>
-     * Перед удалением завершает все активные подключения к этой базе,
-     * чтобы избежать ошибки "database is being accessed by other users".
-     * После удаления закрывает пулы соединений для этой базы.
-     * </p>
-     *
-     * @param conn     соединение с БД (под ролью администратора)
-     * @param dbName   имя удаляемой базы данных
-     * @param response карта для формирования JSON-ответа
-     */
     private void handleDelete(Connection conn, String dbName, Map<String, Object> response) {
         if (dbName == null || dbName.isEmpty() ||
                 dbName.equals("postgres") || dbName.equals("template0") || dbName.equals("template1")) {
@@ -408,36 +352,41 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
-        // Дополнительная проверка: только безопасные символы в имени БД
         if (!DB_NAME_PATTERN.matcher(dbName).matches()) {
             response.put("error", "Invalid database name");
             return;
         }
 
-        try (Statement stmt = conn.createStatement()) {
-            // Завершаем соединения с экранированием имени
-            try {
-                String terminateSql = String.format(
-                        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity " +
-                                "WHERE datname = '%s' AND pid <> pg_backend_pid()",
-                        dbName.replace("'", "''")
-                );
-                stmt.execute(terminateSql);
-            } catch (SQLException e) {
-                log.debug("No active connections to terminate for {}", dbName);
+        try {
+            // Экранируем имя базы данных
+            String quotedDbName = quoteIdent(conn, dbName);
+
+            try (Statement stmt = conn.createStatement()) {
+                // Завершаем соединения с экранированием имени
+                try {
+                    String terminateSql = String.format(
+                            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity " +
+                                    "WHERE datname = %s AND pid <> pg_backend_pid()",
+                            quotedDbName
+                    );
+                    log.debug("Executing: {}", terminateSql);
+                    stmt.execute(terminateSql);
+                } catch (SQLException e) {
+                    log.debug("No active connections to terminate for {}", dbName);
+                }
+
+                // Удаляем базу с экранированным именем
+                String dropSql = "DROP DATABASE IF EXISTS " + quotedDbName;
+                log.debug("Executing: {}", dropSql);
+                stmt.executeUpdate(dropSql);
+
+                // Закрываем пулы соединений для удалённой базы
+                DatabaseConfig.closeStudentPool(dbName);
+                DatabaseConfig.closeTeacherPool(dbName);
+
+                response.put("success", true);
+                response.put("message", "Database '" + dbName + "' deleted");
             }
-
-            // Удаляем базу с экранированием имени
-            String dropSql = String.format("DROP DATABASE IF EXISTS %s", dbName);
-            stmt.executeUpdate(dropSql);
-
-            // Закрываем пулы соединений для удалённой базы
-            DatabaseConfig.closeStudentPool(dbName);
-            DatabaseConfig.closeTeacherPool(dbName);
-
-            response.put("success", true);
-            response.put("message", "Database '" + dbName + "' deleted");
-
         } catch (SQLException e) {
             log.error("Failed to delete database: {}", dbName, e);
             response.put("error", "Failed to delete database: " + e.getMessage());

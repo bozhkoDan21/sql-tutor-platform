@@ -5,8 +5,11 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>SQL Trainer - Панель преподавателя</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2">
     <style>
         .loading-overlay {
             position: fixed;
@@ -201,8 +204,10 @@
                 <span class="badge">Панель преподавателя</span>
             </div>
             <div class="nav-right">
-                <a href="index.jsp" class="nav-link">Студент</a>
-                <a href="teacher.jsp" class="nav-link active">Преподаватель</a>
+                <a href="index.jsp" class="nav-link">Тренажёр</a>
+                <a href="teacher.jsp" class="nav-link active">Панель преподавателя</a>
+                <a href="manageStudents.jsp" class="nav-link">Студенты</a>
+                <a href="profile.jsp" class="nav-link">Профиль</a>
                 <a href="#" id="logoutBtn" class="nav-link" style="background: rgba(255,255,255,0.2);">Выйти</a>
             </div>
         </div>

@@ -40,9 +40,11 @@ public class DatabaseConfig {
             throw new RuntimeException("PostgreSQL JDBC Driver not found", e);
         }
 
-        // Инициализация пула для администратора
         HikariConfig adminConfig = new HikariConfig();
-        adminConfig.setJdbcUrl(String.format("jdbc:postgresql://%s:%s/postgres", DB_HOST, DB_PORT));
+        adminConfig.setJdbcUrl(String.format(
+                "jdbc:postgresql://%s:%s/postgres?useUnicode=true&characterEncoding=UTF-8&characterSetResults=UTF-8",
+                DB_HOST, DB_PORT
+        ));
         adminConfig.setUsername(ADMIN_USER);
         adminConfig.setPassword(ADMIN_PASSWORD);
         adminConfig.setMaximumPoolSize(2);
@@ -50,7 +52,6 @@ public class DatabaseConfig {
         adminConfig.setInitializationFailTimeout(30000);
         adminConfig.setConnectionTestQuery("SELECT 1");
         adminConfig.setPoolName("admin-pool");
-        // Устанавливаем параметры для правильной кодировки
         adminConfig.addDataSourceProperty("stringtype", "unspecified");
 
         adminDataSource = new HikariDataSource(adminConfig);
@@ -83,7 +84,10 @@ public class DatabaseConfig {
     private static HikariDataSource getTeacherDataSource(String dbName) {
         return teacherDataSources.computeIfAbsent(dbName, name -> {
             HikariConfig config = new HikariConfig();
-            config.setJdbcUrl(String.format("jdbc:postgresql://%s:%s/%s", DB_HOST, DB_PORT, name));
+            config.setJdbcUrl(String.format(
+                    "jdbc:postgresql://%s:%s/%s?useUnicode=true&characterEncoding=UTF-8&characterSetResults=UTF-8",
+                    DB_HOST, DB_PORT, name
+            ));
             config.setUsername(TEACHER_USER);
             config.setPassword(TEACHER_PASSWORD);
             config.setMaximumPoolSize(3);
@@ -102,7 +106,10 @@ public class DatabaseConfig {
     private static HikariDataSource getStudentDataSource(String dbName) {
         return studentDataSources.computeIfAbsent(dbName, name -> {
             HikariConfig config = new HikariConfig();
-            config.setJdbcUrl(String.format("jdbc:postgresql://%s:%s/%s", DB_HOST, DB_PORT, name));
+            config.setJdbcUrl(String.format(
+                    "jdbc:postgresql://%s:%s/%s?useUnicode=true&characterEncoding=UTF-8&characterSetResults=UTF-8",
+                    DB_HOST, DB_PORT, name
+            ));
             config.setUsername(STUDENT_USER);
             config.setPassword(STUDENT_PASSWORD);
             config.setMaximumPoolSize(5);
@@ -127,6 +134,7 @@ public class DatabaseConfig {
             stmt.execute("SET work_mem = '4MB'");
             stmt.execute("SET idle_in_transaction_session_timeout = '30s'");
             stmt.execute("SET client_encoding = 'UTF8'");
+            stmt.execute("SET NAMES 'UTF8'");
         } catch (SQLException e) {
             log.warn("Could not set student session limits: {}", e.getMessage());
         }
@@ -175,9 +183,5 @@ public class DatabaseConfig {
 
     public static int getMaxRows() {
         return MAX_ROWS;
-    }
-
-    public static String getTeacherSecret() {
-        return System.getenv().getOrDefault("TEACHER_SECRET", "teacher123");
     }
 }

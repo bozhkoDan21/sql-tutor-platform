@@ -4,8 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>SQL Trainer - учебная платформа</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2">
 
     <!-- CodeMirror CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
@@ -21,8 +24,9 @@
                 <span class="badge">Учебная песочница</span>
             </div>
             <div class="nav-right">
-                <a href="index.jsp" class="nav-link active">Студент</a>
-                <a href="teacher.jsp" id="teacherLink" class="nav-link" style="display: none;">Преподаватель</a>
+                <a href="index.jsp" class="nav-link active">Тренажёр</a>
+                <a href="teacher.jsp" id="teacherLink" class="nav-link" style="display: none;">Панель преподавателя</a>
+                <a href="profile.jsp" class="nav-link">Профиль</a>
                 <a href="#" id="logoutBtn" class="nav-link" style="background: rgba(255,255,255,0.2);">Выйти</a>
             </div>
         </div>
@@ -172,20 +176,33 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=2"></script>
 
     <script>
-        // Проверка авторизации при загрузке страницы
-        (function checkAuth() {
+        // Проверка валидности токена
+        async function checkToken() {
             const token = localStorage.getItem('accessToken');
-            const user = localStorage.getItem('user');
-
-            if (!token || !user) {
+            if (!token) {
                 window.location.href = '/login.jsp';
-                return;
+                return false;
             }
-            // Убираем проверку роли — студент или преподаватель, оба могут выполнять SQL
-        })();
+
+            try {
+                const response = await fetch('/api/user/profile', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (response.status === 401) {
+                    localStorage.clear();
+                    window.location.href = '/login.jsp';
+                    return false;
+                }
+                return true;
+            } catch(e) {
+                localStorage.clear();
+                window.location.href = '/login.jsp';
+                return false;
+            }
+        }
 
         // Показываем вкладку преподавателя только если роль teacher
         (function showTeacherTab() {
@@ -218,6 +235,9 @@
             localStorage.clear();
             window.location.href = '/login.jsp';
         });
+
+        // Вызов проверки токена при загрузке
+        checkToken();
     </script>
 </body>
 </html>

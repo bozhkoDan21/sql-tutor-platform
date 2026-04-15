@@ -44,6 +44,9 @@ services:
       JWT_ACCESS_TOKEN_EXPIRY_HOURS: ${JWT_ACCESS_TOKEN_EXPIRY_HOURS:-1}
       JWT_REFRESH_TOKEN_EXPIRY_DAYS: ${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
       JWT_INACTIVE_TIMEOUT_HOURS: ${JWT_INACTIVE_TIMEOUT_HOURS:-3}
+      JAVA_OPTS: "-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8"
+      LANG: "ru_RU.UTF-8"
+      LC_ALL: "ru_RU.UTF-8"
     ports:
       - "8081:8080"
     restart: unless-stopped
