@@ -1,6 +1,7 @@
 package com.sqltrainer.servlet;
 
 import com.sqltrainer.config.DatabaseConfig;
+import com.sqltrainer.util.QueryExecutor;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,6 +134,10 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
+        // ОЧИЩАЕМ КЕШ ПЕРЕД СОЗДАНИЕМ НОВОЙ БД
+        QueryExecutor.clearCache();
+        log.info("Cache cleared before creating database: {}", dbName);
+
         // Экранируем имя базы данных
         String quotedDbName = quoteIdent(conn, dbName);
 
@@ -200,7 +205,6 @@ public class TeacherServlet extends HttpServlet {
     }
 
     private boolean databaseExists(Connection conn, String dbName) throws SQLException {
-        // Используем PreparedStatement - это безопасно
         String sql = "SELECT 1 FROM pg_database WHERE datname = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, dbName);
@@ -222,14 +226,12 @@ public class TeacherServlet extends HttpServlet {
     }
 
     private void grantStudentAccess(Connection conn, String quotedDbName, String originalDbName) throws SQLException {
-        // GRANT CONNECT с экранированным именем
         try (Statement stmt = conn.createStatement()) {
             String grantConnectSql = "GRANT CONNECT ON DATABASE " + quotedDbName + " TO students";
             log.debug("Executing: {}", grantConnectSql);
             stmt.executeUpdate(grantConnectSql);
         }
 
-        // ALTER DEFAULT PRIVILEGES для схемы public
         try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, originalDbName);
              Statement stmt = dbConn.createStatement()) {
             stmt.executeUpdate("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO students");
@@ -358,6 +360,10 @@ public class TeacherServlet extends HttpServlet {
         }
 
         try {
+            // ОЧИЩАЕМ КЕШ ПЕРЕД УДАЛЕНИЕМ БД
+            QueryExecutor.clearCache();
+            log.info("Cache cleared before deleting database: {}", dbName);
+
             // Экранируем имя базы данных
             String quotedDbName = quoteIdent(conn, dbName);
 

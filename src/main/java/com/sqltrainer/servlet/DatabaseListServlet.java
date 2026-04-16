@@ -1,6 +1,7 @@
 package com.sqltrainer.servlet;
 
 import com.sqltrainer.config.DatabaseConfig;
+import com.sqltrainer.util.QueryExecutor;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,44 +17,12 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.*;
 
-/**
- * Сервлет для получения списка доступных учебных баз данных.
- * <p>
- * Используется на главной странице студента для отображения выпадающего списка баз,
- * с которыми можно работать. Доступен без авторизации.
- *
- *
- * <p>Пример ответа:
- * <pre>
- * {
- *   "success": true,
- *   "databases": ["university_db", "archaeology_db"],
- *   "count": 2
- * }
- * </pre>
- * </p>
- *
- * @author SQL Trainer Team
- * @see DbInfoServlet
- * @see StudentServlet
- */
 @WebServlet("/api/databases")
 public class DatabaseListServlet extends HttpServlet {
 
     private static final Logger log = LoggerFactory.getLogger(DatabaseListServlet.class);
     private final Gson gson = new Gson();
 
-    /**
-     * Обрабатывает GET-запрос и возвращает JSON-список всех учебных баз данных.
-     * <p>
-     * Исключаются системные базы (postgres, template0, template1, template%)
-     * и базы, помеченные как шаблоны.
-     * </p>
-     *
-     * @param req  HTTP-запрос
-     * @param resp HTTP-ответ с JSON-данными
-     * @throws IOException при ошибках ввода-вывода
-     */
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         resp.setContentType("application/json");
@@ -86,6 +55,9 @@ public class DatabaseListServlet extends HttpServlet {
             log.error("Failed to list databases: {}", e.getMessage());
             response.put("success", false);
             response.put("error", "Failed to load databases: " + e.getMessage());
+
+            // При ошибке подключения очищаем кеш, так как данные могли измениться
+            QueryExecutor.clearCache();
         }
 
         resp.getWriter().write(gson.toJson(response));

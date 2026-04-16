@@ -15,51 +15,16 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.regex.Pattern;
 
-/**
- * Сервлет для получения информации о структуре выбранной базы данных.
- * <p>
- * Возвращает список всех пользовательских таблиц в схеме public указанной базы.
- * Используется на главной странице студента для отображения схемы данных.
- * </p>
- *
- * <p>Пример ответа:
- * <pre>
- * {
- *   "success": true,
- *   "dbName": "university_db",
- *   "tables": ["student", "enrollment", "faculty"],
- *   "tableCount": 3
- * }
- * </pre>
- * </p>
- *
- * @author SQL Trainer Team
- * @see DatabaseListServlet
- * @see StudentServlet
- */
 @WebServlet("/api/dbinfo")
 public class DbInfoServlet extends HttpServlet {
 
     private static final Logger log = LoggerFactory.getLogger(DbInfoServlet.class);
     private final Gson gson = new Gson();
 
-    /**
-     * Обрабатывает GET-запрос и возвращает JSON-список таблиц в указанной базе данных.
-     * <p>
-     * Параметры запроса:
-     * <ul>
-     *   <li><b>db</b> — имя базы данных (обязательный)</li>
-     * </ul>
-     * </p>
-     * <p>
-     * Исключаются системные таблицы PostgreSQL (начинающиеся с pg_ или sql_).
-     * </p>
-     *
-     * @param req  HTTP-запрос с параметром db
-     * @param resp HTTP-ответ с JSON-данными
-     * @throws IOException при ошибках ввода-вывода
-     */
+    private static final Pattern VALID_DB_NAME_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         resp.setContentType("application/json");
@@ -69,6 +34,13 @@ public class DbInfoServlet extends HttpServlet {
 
         if (dbName == null || dbName.isEmpty()) {
             resp.getWriter().write("{\"error\":\"Database name is required\"}");
+            return;
+        }
+
+        // ВАЛИДАЦИЯ: защита от SQL-инъекций
+        if (!isValidDatabaseName(dbName)) {
+            log.warn("Invalid database name: {}", dbName);
+            resp.getWriter().write("{\"error\":\"Invalid database name\"}");
             return;
         }
 
@@ -105,5 +77,22 @@ public class DbInfoServlet extends HttpServlet {
         }
 
         resp.getWriter().write(gson.toJson(result));
+    }
+
+    private boolean isValidDatabaseName(String name) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        if (name.length() > 63) {
+            return false;
+        }
+        // Защита от системных БД
+        String[] systemDbs = {"postgres", "template0", "template1"};
+        for (String systemDb : systemDbs) {
+            if (name.equalsIgnoreCase(systemDb)) {
+                return false;
+            }
+        }
+        return VALID_DB_NAME_PATTERN.matcher(name).matches();
     }
 }

@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Semaphore;
 
 /**
  * Выполнение SQL-запросов с EXPLAIN ANALYZE.
@@ -19,6 +20,7 @@ import java.util.concurrent.TimeUnit;
  *   <li>Одиночные SELECT запросы</li>
  *   <li>Несколько SELECT запросов через ; (выполняется последний)</li>
  *   <li>Кеширование результатов на 30 секунд</li>
+ *   <li>Ограничение параллельных запросов через семафор</li>
  * </ul>
  * </p>
  */
@@ -31,6 +33,15 @@ public class QueryExecutor {
 
     /** Планировщик для периодической очистки кеша */
     private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
+    /** Семафор для ограничения параллельных запросов */
+    private static final int MAX_CONCURRENT_QUERIES = Integer.parseInt(
+            System.getenv().getOrDefault("MAX_CONCURRENT_QUERIES", "10"));
+    private static final Semaphore querySemaphore = new Semaphore(MAX_CONCURRENT_QUERIES);
+
+    /** Таймаут ожидания в очереди (30 секунд) */
+    private static final int SEMAPHORE_TIMEOUT_SEC = Integer.parseInt(
+            System.getenv().getOrDefault("SEMAPHORE_TIMEOUT_SEC", "30"));
 
     static {
         // Периодическая очистка кеша каждую минуту
@@ -56,6 +67,8 @@ public class QueryExecutor {
                 Thread.currentThread().interrupt();
             }
         }));
+
+        log.info("QueryExecutor initialized with max concurrent queries: {}", MAX_CONCURRENT_QUERIES);
     }
 
     public static class QueryResult {
@@ -95,7 +108,7 @@ public class QueryExecutor {
     }
 
     /**
-     * Выполнить запрос от имени студента.
+     * Выполнить запрос от имени студента с ограничением параллельности.
      * Поддерживает несколько SELECT запросов, разделённых точкой с запятой.
      * Возвращает результат последнего SELECT запроса.
      *
@@ -104,6 +117,35 @@ public class QueryExecutor {
      * @return результат выполнения
      */
     public static QueryResult executeAsStudent(String dbName, String sql) {
+        // Пытаемся получить разрешение от семафора
+        boolean acquired = false;
+        try {
+            acquired = querySemaphore.tryAcquire(SEMAPHORE_TIMEOUT_SEC, TimeUnit.SECONDS);
+            if (!acquired) {
+                int activeQueries = MAX_CONCURRENT_QUERIES - querySemaphore.availablePermits();
+                log.warn("Query rejected - too many concurrent queries. Active: {}, Max: {}",
+                        activeQueries, MAX_CONCURRENT_QUERIES);
+                return errorResult("Сервер перегружен. Пожалуйста, повторите запрос позже. " +
+                        "Активных запросов: " + activeQueries);
+            }
+
+            // Выполняем сам запрос
+            return executeAsStudentInternal(dbName, sql);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return errorResult("Query was interrupted");
+        } finally {
+            if (acquired) {
+                querySemaphore.release();
+            }
+        }
+    }
+
+    /**
+     * Внутренний метод выполнения запроса (без семафора)
+     */
+    private static QueryResult executeAsStudentInternal(String dbName, String sql) {
         // Валидация
         if (sql == null || sql.trim().isEmpty()) {
             return errorResult("Query is empty");
@@ -272,10 +314,25 @@ public class QueryExecutor {
     }
 
     /**
-     * Очистка кеша (для тестов или при изменении данных)
+     * Очистка кеша (при изменении данных или создании/удалении БД)
      */
     public static void clearCache() {
+        int size = cache.size();
         cache.clear();
-        log.info("Query cache cleared");
+        log.info("Query cache cleared. Removed {} entries", size);
+    }
+
+    /**
+     * Получить количество активных запросов
+     */
+    public static int getActiveQueryCount() {
+        return MAX_CONCURRENT_QUERIES - querySemaphore.availablePermits();
+    }
+
+    /**
+     * Получить максимальное количество параллельных запросов
+     */
+    public static int getMaxConcurrentQueries() {
+        return MAX_CONCURRENT_QUERIES;
     }
 }

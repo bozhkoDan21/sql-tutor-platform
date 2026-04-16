@@ -104,24 +104,53 @@
             gap: 1rem;
             margin-top: 1.5rem;
         }
+
+        /* ===== НОВЫЕ СТИЛИ ДЛЯ ПАГИНАЦИИ ===== */
         .pagination {
             display: flex;
             justify-content: center;
+            align-items: center;
             gap: 0.5rem;
             margin-top: 1.5rem;
+            flex-wrap: wrap;
+            padding: 0.5rem;
         }
         .page-btn {
-            padding: 0.5rem 1rem;
+            padding: 0.5rem 0.75rem;
+            min-width: 2.5rem;
             border: 1px solid var(--border);
             background: var(--white);
             border-radius: var(--radius-sm);
             cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        .page-btn:hover {
+            background: var(--primary-light);
+            border-color: var(--primary);
         }
         .page-btn.active {
             background: var(--primary);
             color: white;
             border-color: var(--primary);
         }
+        .page-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .page-btn.disabled:hover {
+            background: var(--white);
+            border-color: var(--border);
+        }
+        .pagination-nav {
+            background: var(--primary-light);
+            font-weight: bold;
+        }
+        .pagination-dots {
+            padding: 0.5rem;
+            color: var(--text-light);
+        }
+
         .form-input {
             width: 100%;
             padding: 0.5rem;
@@ -145,6 +174,7 @@
     </style>
 </head>
 <body>
+    <!-- ... весь остальной HTML остаётся без изменений ... -->
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-left">
@@ -362,17 +392,11 @@
                 const url = '/api/teacher/students/list?search=' + encodeURIComponent(search) + '&group=' + encodeURIComponent(group);
                 const response = await fetchWithAuth(url, { method: 'GET' });
 
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    const text = await response.text();
-                    console.error('Non-JSON response:', text.substring(0, 500));
-                    throw new Error('Сервер вернул HTML вместо JSON. Проверьте авторизацию.');
-                }
-
                 const data = await response.json();
 
                 if (data.success) {
                     currentStudents = data.students || [];
+                    currentPage = 1;
                     renderStudents();
                     renderPagination();
                     updateGroupFilter(data.groups || []);
@@ -432,24 +456,82 @@
             tbody.innerHTML = html;
         }
 
+        // ===== НОВАЯ ФУНКЦИЯ ПАГИНАЦИИ С УМНЫМИ КНОПКАМИ =====
         function renderPagination() {
             const totalPages = Math.ceil(currentStudents.length / itemsPerPage);
             const pagination = document.getElementById('pagination');
+
             if (totalPages <= 1) {
                 pagination.innerHTML = '';
                 return;
             }
 
             let html = '';
-            for (let i = 1; i <= totalPages; i++) {
+
+            // Кнопка "В начало"
+            if (currentPage > 1) {
+                html += '<button class="page-btn pagination-nav" onclick="goToPage(1)" title="Первая страница">⏮</button>';
+                html += '<button class="page-btn pagination-nav" onclick="goToPage(' + (currentPage - 1) + ')" title="Предыдущая">◀</button>';
+            } else {
+                html += '<button class="page-btn disabled" disabled>⏮</button>';
+                html += '<button class="page-btn disabled" disabled>◀</button>';
+            }
+
+            // Максимум 7 кнопок с номерами страниц
+            const maxVisiblePages = 7;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+            // Корректировка если мы в конце
+            if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            // Первая страница и троеточие
+            if (startPage > 1) {
+                html += '<button class="page-btn" onclick="goToPage(1)">1</button>';
+                if (startPage > 2) {
+                    html += '<span class="pagination-dots">...</span>';
+                }
+            }
+
+            // Номера страниц
+            for (let i = startPage; i <= endPage; i++) {
                 html += '<button class="page-btn' + (i === currentPage ? ' active' : '') + '" onclick="goToPage(' + i + ')">' + i + '</button>';
             }
+
+            // Последняя страница и троеточие
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    html += '<span class="pagination-dots">...</span>';
+                }
+                html += '<button class="page-btn" onclick="goToPage(' + totalPages + ')">' + totalPages + '</button>';
+            }
+
+            // Кнопка "В конец"
+            if (currentPage < totalPages) {
+                html += '<button class="page-btn pagination-nav" onclick="goToPage(' + (currentPage + 1) + ')" title="Следующая">▶</button>';
+                html += '<button class="page-btn pagination-nav" onclick="goToPage(' + totalPages + ')" title="Последняя страница">⏭</button>';
+            } else {
+                html += '<button class="page-btn disabled" disabled>▶</button>';
+                html += '<button class="page-btn disabled" disabled>⏭</button>';
+            }
+
+            // Добавляем информацию о количестве страниц
+            html += '<span style="margin-left: 1rem; font-size: 0.8rem; color: var(--text-light);">';
+            html += 'Страница ' + currentPage + ' из ' + totalPages;
+            html += ' (всего ' + currentStudents.length + ' студентов)';
+            html += '</span>';
+
             pagination.innerHTML = html;
         }
 
         function goToPage(page) {
+            const totalPages = Math.ceil(currentStudents.length / itemsPerPage);
+            if (page < 1 || page > totalPages) return;
             currentPage = page;
             renderStudents();
+            renderPagination();
         }
 
         function updateGroupFilter(groups) {

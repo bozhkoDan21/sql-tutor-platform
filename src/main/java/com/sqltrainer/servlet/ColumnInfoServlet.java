@@ -15,16 +15,16 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.regex.Pattern;
 
-/**
- * Сервлет для получения информации о колонках таблицы.
- * Используется для автодополнения в редакторе SQL.
- */
 @WebServlet("/api/columns")
 public class ColumnInfoServlet extends HttpServlet {
 
     private static final Logger log = LoggerFactory.getLogger(ColumnInfoServlet.class);
     private final Gson gson = new Gson();
+
+    // Только буквы, цифры и подчёркивания, начинается с буквы или подчёркивания
+    private static final Pattern VALID_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -39,11 +39,25 @@ public class ColumnInfoServlet extends HttpServlet {
             return;
         }
 
+        // ВАЛИДАЦИЯ: защита от SQL-инъекций
+        if (!isValidIdentifier(dbName)) {
+            log.warn("Invalid database name: {}", dbName);
+            resp.getWriter().write("{\"error\":\"Invalid database name\"}");
+            return;
+        }
+
+        if (!isValidIdentifier(tableName)) {
+            log.warn("Invalid table name: {}", tableName);
+            resp.getWriter().write("{\"error\":\"Invalid table name\"}");
+            return;
+        }
+
         Map<String, Object> result = new HashMap<>();
         List<String> columns = new ArrayList<>();
 
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.STUDENT, dbName)) {
             DatabaseMetaData meta = conn.getMetaData();
+            // tableName уже валидирован, но для безопасности используем экранирование
             try (ResultSet rs = meta.getColumns(null, "public", tableName, "%")) {
                 while (rs.next()) {
                     columns.add(rs.getString("COLUMN_NAME"));
@@ -59,5 +73,29 @@ public class ColumnInfoServlet extends HttpServlet {
         }
 
         resp.getWriter().write(gson.toJson(result));
+    }
+
+    /**
+     * Валидация идентификатора БД/таблицы/колонки
+     * Только буквы, цифры, подчёркивания, начинается с буквы или подчёркивания
+     */
+    private boolean isValidIdentifier(String identifier) {
+        if (identifier == null || identifier.isEmpty()) {
+            return false;
+        }
+        // Дополнительная защита от зарезервированных слов и слишком длинных имён
+        if (identifier.length() > 63) {
+            return false;
+        }
+        String upper = identifier.toUpperCase();
+        // Защита от SQL-команд в имени
+        String[] reserved = {"SELECT", "INSERT", "UPDATE", "DELETE", "DROP", "CREATE",
+                "ALTER", "TRUNCATE", "GRANT", "REVOKE", "UNION", "WHERE"};
+        for (String word : reserved) {
+            if (upper.contains(word)) {
+                return false;
+            }
+        }
+        return VALID_IDENTIFIER_PATTERN.matcher(identifier).matches();
     }
 }
