@@ -170,8 +170,8 @@ public class QueryExecutor {
         }
 
         // Если был только один запрос или несколько, но последний SELECT
-        if (statements.length > 1) {
-            log.info("Multiple statements detected, executing only the last SELECT: {}",
+        if (log.isDebugEnabled()) {
+            log.debug("Multiple statements detected, executing only the last SELECT: {}",
                     lastSelect.length() > 100 ? lastSelect.substring(0, 100) + "..." : lastSelect);
         }
 
@@ -242,8 +242,10 @@ public class QueryExecutor {
             // Кешируем результат
             cache.put(cacheKey, result);
 
-            log.info("Query executed: {} rows in {} ms on database {}",
-                    result.getRowCount(), executionTime, dbName);
+            if (log.isDebugEnabled()) {
+                log.debug("Query executed: {} rows in {} ms on database {}",
+                        result.getRowCount(), executionTime, dbName);
+            }
 
         } catch (SQLException e) {
             String errorMsg = handleSQLError(e);

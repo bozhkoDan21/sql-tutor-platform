@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+    <!-- Уровень логирования из переменной окружения, по умолчанию INFO -->
+    <property name="LOG_LEVEL" value="${LOG_LEVEL:-INFO}" />
+
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
@@ -16,6 +19,20 @@
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
+
+    <!-- Настройка уровней для разных пакетов -->
+    <!-- Частые операции логируем только на WARN/ERROR в production -->
+    <logger name="com.sqltrainer.servlet.StudentServlet" level="${LOG_LEVEL:-INFO}"/>
+    <logger name="com.sqltrainer.util.QueryExecutor" level="${LOG_LEVEL:-INFO}"/>
+
+    <!-- Фильтры и авторизацию логируем на WARN (проблемы) -->
+    <logger name="com.sqltrainer.filter" level="WARN"/>
+
+    <!-- Аутентификацию логируем на INFO (важные события) -->
+    <logger name="com.sqltrainer.servlet.AuthServlet" level="INFO"/>
+
+    <!-- Конфигурацию и инициализацию логируем на INFO -->
+    <logger name="com.sqltrainer.config" level="INFO"/>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>

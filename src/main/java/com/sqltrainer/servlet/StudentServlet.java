@@ -27,6 +27,10 @@ public class StudentServlet extends HttpServlet {
     private static final ConcurrentHashMap<String, Long> lastRequestTime = new ConcurrentHashMap<>();
     private static final long MIN_REQUEST_INTERVAL_MS = 1000; // минимум 1 секунда между запросами
 
+    // Агрегированная статистика запросов
+    private static int queryCounter = 0;
+    private static long lastLogTime = System.currentTimeMillis();
+
     public static class SessionInfo {
         private final String sessionId;
         private final String lastQuery;
@@ -40,16 +44,12 @@ public class StudentServlet extends HttpServlet {
             this.lastAccess = new Date();
         }
 
-        // Геттеры используются TeacherServlet через рефлексию Gson
         public String getSessionId() { return sessionId; }
         public String getDbName() { return dbName; }
         public String getLastQuery() { return lastQuery; }
         public Date getLastAccess() { return lastAccess; }
     }
 
-    /**
-     * Получить копию активных сессий (для TeacherServlet)
-     */
     public static ConcurrentHashMap<String, SessionInfo> getActiveSessions() {
         return new ConcurrentHashMap<>(activeSessions);
     }
@@ -77,11 +77,10 @@ public class StudentServlet extends HttpServlet {
             return;
         }
 
-        // Получаем или создаем сессию
         HttpSession session = req.getSession(true);
         String sessionId = session.getId();
 
-        // Ограничение частоты запросов (защита от DoS)
+        // Ограничение частоты запросов
         Long lastRequest = lastRequestTime.get(sessionId);
         if (lastRequest != null && System.currentTimeMillis() - lastRequest < MIN_REQUEST_INTERVAL_MS) {
             log.warn("Rate limit exceeded for session {}", sessionId);
@@ -90,40 +89,38 @@ public class StudentServlet extends HttpServlet {
         }
         lastRequestTime.put(sessionId, System.currentTimeMillis());
 
-        // Периодическая очистка старых записей частоты (раз в 100 запросов)
         if (lastRequestTime.size() > 1000) {
             cleanOldRateLimits();
         }
 
-        // Сохраняем информацию об активности
         activeSessions.put(sessionId, new SessionInfo(sessionId, dbName, query));
-
-        // Очищаем старые сессии (старше 30 минут)
         cleanOldSessions();
 
-        log.info("Executing query on {} from session {}: {}", dbName, sessionId,
-                query.length() > 100 ? query.substring(0, 100) + "..." : query);
+        if (log.isDebugEnabled()) {
+            log.debug("Executing query on {} from session {}: {}", dbName, sessionId,
+                    query.length() > 100 ? query.substring(0, 100) + "..." : query);
+        }
 
-        // Выполняем запрос
         QueryExecutor.QueryResult result = QueryExecutor.executeAsStudent(dbName, query);
-
         resp.getWriter().write(gson.toJson(result));
+
+        queryCounter++;
+        if (queryCounter >= 100 || System.currentTimeMillis() - lastLogTime > 60000) {
+            log.info("Processed {} queries in last period. Active sessions: {}, Rate limit entries: {}",
+                    queryCounter, activeSessions.size(), lastRequestTime.size());
+            queryCounter = 0;
+            lastLogTime = System.currentTimeMillis();
+        }
     }
 
-    /**
-     * Очистка неактивных сессий (старше 30 минут)
-     */
     private void cleanOldSessions() {
         long cutoff = System.currentTimeMillis() - 30 * 60 * 1000;
         activeSessions.entrySet().removeIf(entry ->
                 entry.getValue().lastAccess.getTime() < cutoff);
     }
 
-    /**
-     * Очистка старых записей ограничения частоты запросов
-     */
     private void cleanOldRateLimits() {
-        long cutoff = System.currentTimeMillis() - 60 * 1000; // старше минуты
+        long cutoff = System.currentTimeMillis() - 60 * 1000;
         lastRequestTime.entrySet().removeIf(entry -> entry.getValue() < cutoff);
     }
 }
