@@ -601,15 +601,22 @@ function loadDbInfo(dbName) {
     }
 
     const tablesList = document.getElementById('tablesList');
+    const tablesCountSpan = document.getElementById('tablesCount');
     const dbNameElement = document.getElementById('dbName');
     const currentDbBadge = document.getElementById('currentDbBadge');
     const dbInfoCard = document.getElementById('dbInfoCard');
 
     dbNameElement.textContent = dbName;
     currentDbBadge.textContent = dbName;
+    currentDbBadge.title = dbName;
     dbInfoCard.style.display = 'block';
 
-    tablesList.innerHTML = '<li style="grid-column: 1/-1; text-align: center;">⏳ Загрузка таблиц...</li>';
+    // Сбрасываем счётчик
+    if (tablesCountSpan) {
+        tablesCountSpan.textContent = '0';
+    }
+
+    tablesList.innerHTML = '<li style="text-align: center; justify-content: center;">⏳ Загрузка таблиц...</li>';
 
     currentDbRequest = new AbortController();
 
@@ -631,22 +638,29 @@ function loadDbInfo(dbName) {
                 currentTables = data.tables || [];
                 tablesList.innerHTML = '';
 
+                // Обновляем счётчик
+                if (tablesCountSpan) {
+                    tablesCountSpan.textContent = currentTables.length;
+                }
+
                 if (currentTables.length > 0) {
                     currentTables.sort().forEach(table => {
                         const li = document.createElement('li');
                         li.textContent = table;
                         li.onclick = () => insertTableName(table);
-                        li.style.cursor = 'pointer';
                         li.title = 'Нажмите, чтобы вставить имя таблицы';
                         tablesList.appendChild(li);
                     });
 
                     await loadAllTableColumns(dbName, currentTables);
                 } else {
-                    tablesList.innerHTML = '<li style="grid-column: 1/-1; text-align: center;">📭 Нет таблиц</li>';
+                    tablesList.innerHTML = '<li style="text-align: center; justify-content: center;">📭 Нет таблиц</li>';
                 }
             } else {
-                tablesList.innerHTML = `<li style="grid-column: 1/-1; color: #ef4444; text-align: center;">❌ ${data.error || 'Ошибка загрузки'}</li>`;
+                tablesList.innerHTML = `<li style="color: #ef4444; text-align: center; justify-content: center;">❌ ${data.error || 'Ошибка загрузки'}</li>`;
+                if (tablesCountSpan) {
+                    tablesCountSpan.textContent = '0';
+                }
             }
             currentDbRequest = null;
         })
@@ -656,7 +670,10 @@ function loadDbInfo(dbName) {
             }
             console.error('Error loading db info:', error);
             if (currentDbName === dbName) {
-                tablesList.innerHTML = '<li style="grid-column: 1/-1; color: #ef4444; text-align: center;">❌ Ошибка соединения</li>';
+                tablesList.innerHTML = '<li style="color: #ef4444; text-align: center; justify-content: center;">❌ Ошибка соединения</li>';
+                if (tablesCountSpan) {
+                    tablesCountSpan.textContent = '0';
+                }
             }
             currentDbRequest = null;
         });

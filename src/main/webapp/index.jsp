@@ -62,8 +62,8 @@
 
                         <div class="db-tables-section">
                             <div class="tables-header">
-                                <span class="tables-icon">📋</span>
                                 <h4>Таблицы в базе</h4>
+                                <span class="tables-count" id="tablesCount">0</span>
                             </div>
                             <div class="tables-grid" id="tablesList">
                                 <li>Загрузка...</li>
@@ -71,9 +71,11 @@
                         </div>
 
                         <div class="connection-status">
-                            <span class="status-indicator online"></span>
-                            <span class="status-text">PostgreSQL: подключено</span>
-                            <span class="db-badge" id="currentDbBadge"></span>
+                            <div class="status-left">
+                                <span class="status-indicator online"></span>
+                                <span class="status-text">PostgreSQL</span>
+                            </div>
+                            <span class="db-badge" id="currentDbBadge" title=""></span>
                         </div>
                     </div>
                 </div>
