@@ -21,6 +21,7 @@ import java.util.concurrent.Semaphore;
  *   <li>Несколько SELECT запросов через ; (выполняется последний)</li>
  *   <li>Кеширование результатов на 30 секунд</li>
  *   <li>Ограничение параллельных запросов через семафор</li>
+ *   <li>Опциональное получение EXPLAIN (через параметр needExplain)</li>
  * </ul>
  * </p>
  */
@@ -74,7 +75,8 @@ public class QueryExecutor {
     public static class QueryResult {
         private List<String> columns = new ArrayList<>();
         private List<Map<String, Object>> rows = new ArrayList<>();
-        private String explain;
+        private String explainJson;      // JSON для визуализации деревом
+        private String explainText;      // TEXT для оригинального вывода PostgreSQL
         private long executionTimeMs;
         private String error;
         private boolean success;
@@ -89,8 +91,15 @@ public class QueryExecutor {
             this.rowCount = rows.size();
         }
 
-        public String getExplain() { return explain; }
-        public void setExplain(String explain) { this.explain = explain; }
+        public String getExplain() { return explainJson; }
+        @Deprecated
+        public void setExplain(String explain) { this.explainJson = explain; }
+
+        public String getExplainJson() { return explainJson; }
+        public void setExplainJson(String explainJson) { this.explainJson = explainJson; }
+
+        public String getExplainText() { return explainText; }
+        public void setExplainText(String explainText) { this.explainText = explainText; }
 
         public long getExecutionTimeMs() { return executionTimeMs; }
         public void setExecutionTimeMs(long executionTimeMs) { this.executionTimeMs = executionTimeMs; }
@@ -114,9 +123,10 @@ public class QueryExecutor {
      *
      * @param dbName имя базы данных
      * @param sql    SQL запрос (может содержать несколько SELECT через ;)
+     * @param needExplain нужно ли получать EXPLAIN
      * @return результат выполнения
      */
-    public static QueryResult executeAsStudent(String dbName, String sql) {
+    public static QueryResult executeAsStudent(String dbName, String sql, boolean needExplain) {
         // Пытаемся получить разрешение от семафора
         boolean acquired = false;
         try {
@@ -130,7 +140,7 @@ public class QueryExecutor {
             }
 
             // Выполняем сам запрос
-            return executeAsStudentInternal(dbName, sql);
+            return executeAsStudentInternal(dbName, sql, needExplain);
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -145,7 +155,7 @@ public class QueryExecutor {
     /**
      * Внутренний метод выполнения запроса (без семафора)
      */
-    private static QueryResult executeAsStudentInternal(String dbName, String sql) {
+    private static QueryResult executeAsStudentInternal(String dbName, String sql, boolean needExplain) {
         // Валидация
         if (sql == null || sql.trim().isEmpty()) {
             return errorResult("Query is empty");
@@ -170,19 +180,19 @@ public class QueryExecutor {
         }
 
         // Если был только один запрос или несколько, но последний SELECT
-        if (log.isDebugEnabled()) {
+        if (statements.length > 1 && log.isDebugEnabled()) {
             log.debug("Multiple statements detected, executing only the last SELECT: {}",
                     lastSelect.length() > 100 ? lastSelect.substring(0, 100) + "..." : lastSelect);
         }
 
         // Выполняем последний SELECT запрос
-        return executeSingleQuery(dbName, lastSelect);
+        return executeSingleQuery(dbName, lastSelect, needExplain);
     }
 
     /**
      * Выполняет один SELECT запрос
      */
-    private static QueryResult executeSingleQuery(String dbName, String sql) {
+    private static QueryResult executeSingleQuery(String dbName, String sql, boolean needExplain) {
         String sqlLower = sql.toLowerCase();
 
         // Защита от опасных конструкций
@@ -192,7 +202,7 @@ public class QueryExecutor {
         }
 
         // Проверяем кеш
-        String cacheKey = dbName + ":" + sql;
+        String cacheKey = dbName + ":" + sql + ":explain=" + needExplain;
         QueryResult cached = cache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.getExecutionTimeMs()) < CACHE_TTL_MS) {
             log.debug("Returning cached result for: {}", cacheKey);
@@ -209,9 +219,15 @@ public class QueryExecutor {
             stmt.setQueryTimeout(DatabaseConfig.getQueryTimeout());
             stmt.setMaxRows(DatabaseConfig.getMaxRows());
 
-            // Получаем план выполнения
-            String explainPlan = getExplainPlan(stmt, sql);
-            result.setExplain(explainPlan);
+            // Получаем план выполнения ТОЛЬКО если needExplain = true
+            if (needExplain) {
+                ExplainResult explainResult = getExplainPlan(stmt, sql);
+                result.setExplainJson(explainResult.json);
+                result.setExplainText(explainResult.text);
+            } else {
+                result.setExplainJson(null);
+                result.setExplainText(null);
+            }
 
             // Получаем данные
             try (ResultSet rs = stmt.executeQuery(sql)) {
@@ -243,8 +259,8 @@ public class QueryExecutor {
             cache.put(cacheKey, result);
 
             if (log.isDebugEnabled()) {
-                log.debug("Query executed: {} rows in {} ms on database {}",
-                        result.getRowCount(), executionTime, dbName);
+                log.debug("Query executed: {} rows in {} ms on database {} (explain: {})",
+                        result.getRowCount(), executionTime, dbName, needExplain);
             }
 
         } catch (SQLException e) {
@@ -257,19 +273,56 @@ public class QueryExecutor {
     }
 
     /**
-     * Получить план выполнения через EXPLAIN ANALYZE
+     * Вспомогательный класс для хранения обоих форматов EXPLAIN
      */
-    private static String getExplainPlan(Statement stmt, String sql) throws SQLException {
-        String explainSql = "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) " + sql;
+    private static class ExplainResult {
+        String json;
+        String text;
 
-        try (ResultSet rs = stmt.executeQuery(explainSql)) {
+        ExplainResult(String json, String text) {
+            this.json = json;
+            this.text = text;
+        }
+    }
+
+    /**
+     * Получить план выполнения через EXPLAIN ANALYZE в двух форматах: JSON и TEXT
+     */
+    private static ExplainResult getExplainPlan(Statement stmt, String sql) throws SQLException {
+        String explainSqlJson = "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + sql;
+        String explainSqlText = "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) " + sql;
+
+        String jsonPlan = null;
+        String textPlan = null;
+
+        // Получаем JSON план (для визуализации деревом)
+        try {
+            try (ResultSet rs = stmt.executeQuery(explainSqlJson)) {
+                if (rs.next()) {
+                    jsonPlan = rs.getString(1);
+                }
+            }
+        } catch (SQLException e) {
+            if (log.isDebugEnabled()) {
+                log.debug("JSON format not supported: {}", e.getMessage());
+            }
+        }
+
+        // Получаем TEXT план (оригинальный вывод PostgreSQL)
+        try (ResultSet rs = stmt.executeQuery(explainSqlText)) {
             StringBuilder plan = new StringBuilder();
-            plan.append("=== EXPLAIN ANALYZE ===\n");
             while (rs.next()) {
                 plan.append(rs.getString(1)).append("\n");
             }
-            return plan.toString();
+            textPlan = plan.toString();
         }
+
+        // Если JSON не получили, но TEXT есть - используем TEXT для обоих полей
+        if (jsonPlan == null || !jsonPlan.trim().startsWith("[")) {
+            jsonPlan = textPlan;
+        }
+
+        return new ExplainResult(jsonPlan, textPlan);
     }
 
     /**

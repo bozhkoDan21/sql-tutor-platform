@@ -138,10 +138,17 @@
                                 <span class="btn-icon">✨</span>
                                 Формат
                             </button>
-                            <button id="downloadBtn" class="btn btn-secondary" style="margin-left: auto;">
+                            <button id="downloadBtn" class="btn btn-secondary">
                                 <span class="btn-icon">📥</span>
                                 Скачать CSV
                             </button>
+
+                            <label class="explain-checkbox" title="Показывать план выполнения запроса">
+                                <input type="checkbox" id="showExplainCheckbox" checked>
+                                <span class="checkbox-icon">📊</span>
+                                <span class="checkbox-text">EXPLAIN</span>
+                            </label>
+
                             <span id="executionTime" class="execution-time"></span>
                         </div>
                     </div>
@@ -162,7 +169,12 @@
                     <div class="explain-section">
                         <details class="explain-details">
                             <summary class="explain-summary">📊 Показать план выполнения (EXPLAIN ANALYZE)</summary>
-                            <pre id="explainContainer" class="explain-output">-- Здесь появится вывод EXPLAIN ANALYZE</pre>
+                            <div class="explain-toolbar">
+                                <button class="explain-view-btn active" data-view="tree">🌳 Дерево</button>
+                                <button class="explain-view-btn" data-view="text">📄 Текст</button>
+                            </div>
+                            <div id="explainTreeView" class="explain-tree-container"></div>
+                            <pre id="explainTextView" class="explain-output" style="display: none;">-- Здесь появится вывод EXPLAIN ANALYZE</pre>
                         </details>
                     </div>
                 </div>

@@ -61,6 +61,8 @@ public class StudentServlet extends HttpServlet {
 
         String dbName = req.getParameter("database");
         String query = req.getParameter("query");
+        String explainParam = req.getParameter("explain");
+        boolean needExplain = explainParam == null || "true".equals(explainParam);
 
         if (dbName == null || dbName.isEmpty()) {
             resp.getWriter().write("{\"error\":\"Database name is required\"}");
@@ -101,7 +103,7 @@ public class StudentServlet extends HttpServlet {
                     query.length() > 100 ? query.substring(0, 100) + "..." : query);
         }
 
-        QueryExecutor.QueryResult result = QueryExecutor.executeAsStudent(dbName, query);
+        QueryExecutor.QueryResult result = QueryExecutor.executeAsStudent(dbName, query, needExplain);
         resp.getWriter().write(gson.toJson(result));
 
         queryCounter++;

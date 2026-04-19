@@ -25,6 +25,13 @@ function getAuthHeaders() {
     return token ? { 'Authorization': 'Bearer ' + token } : {};
 }
 
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const executeBtn = document.getElementById('executeBtn');
     const clearBtn = document.getElementById('clearBtn');
@@ -33,7 +40,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultContainer = document.getElementById('resultContainer');
     const executionTime = document.getElementById('executionTime');
     const rowCount = document.getElementById('rowCount');
-    const explainContainer = document.getElementById('explainContainer');
     const dbSelector = document.getElementById('dbSelector');
 
     // Инициализация CodeMirror
@@ -89,6 +95,33 @@ document.addEventListener('DOMContentLoaded', function() {
             downloadCSV();
         });
     }
+
+    // Делегирование событий для переключения вида EXPLAIN
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.explain-view-btn');
+        if (!btn) return;
+
+        const view = btn.getAttribute('data-view');
+        const treeView = document.getElementById('explainTreeView');
+        const textView = document.getElementById('explainTextView');
+
+        if (!treeView || !textView) return;
+
+        // Обновляем активную кнопку
+        document.querySelectorAll('.explain-view-btn').forEach(b => {
+            b.classList.remove('active');
+        });
+        btn.classList.add('active');
+
+        // Показываем нужное представление
+        if (view === 'tree') {
+            treeView.style.display = 'block';
+            textView.style.display = 'none';
+        } else if (view === 'text') {
+            treeView.style.display = 'none';
+            textView.style.display = 'block';
+        }
+    });
 
     loadDatabases();
 
@@ -390,19 +423,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         resultContainer.innerHTML = '<div class="empty-state">⏳ Выполнение запроса...</div>';
-        explainContainer.innerHTML = '-- Получение плана выполнения...';
+
+        // Получаем состояние чекбокса
+        const showExplain = document.getElementById('showExplainCheckbox')?.checked ?? true;
+
+        const treeView = document.getElementById('explainTreeView');
+        const textView = document.getElementById('explainTextView');
+        if (treeView) treeView.innerHTML = showExplain ? '-- Получение плана выполнения...' : '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
+        if (textView) textView.textContent = showExplain ? '-- Получение плана выполнения...' : '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
 
         const token = getAuthToken();
+
+        // Добавляем параметр explain в запрос
+        const bodyParams = new URLSearchParams({
+            'database': selectedDb,
+            'query': query,
+            'explain': showExplain ? 'true' : 'false'  // НОВЫЙ ПАРАМЕТР
+        });
+
         fetch('/api/execute', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Authorization': token ? 'Bearer ' + token : ''
             },
-            body: new URLSearchParams({
-                'database': selectedDb,
-                'query': query
-            })
+            body: bodyParams
         })
         .then(response => {
             if (response.status === 401) {
@@ -436,8 +481,24 @@ document.addEventListener('DOMContentLoaded', function() {
         executionTime.textContent = `⏱️ Время: ${data.executionTimeMs} мс`;
         rowCount.textContent = `${data.rows.length} строк`;
 
-        if (data.explain) {
-            explainContainer.innerHTML = data.explain;
+        // Визуализация EXPLAIN
+        const showExplain = document.getElementById('showExplainCheckbox')?.checked ?? true;
+
+        if (!showExplain) {
+            // Если EXPLAIN выключен, показываем сообщение
+            const treeView = document.getElementById('explainTreeView');
+            const textView = document.getElementById('explainTextView');
+            if (treeView) treeView.innerHTML = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
+            if (textView) textView.textContent = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
+        } else if (data.explainJson || data.explainText) {
+            displayExplain(data.explainJson, data.explainText);
+        } else if (data.explain) {
+            displayExplain(data.explain, data.explain);
+        } else {
+            const treeView = document.getElementById('explainTreeView');
+            const textView = document.getElementById('explainTextView');
+            if (treeView) treeView.innerHTML = '-- Здесь появится вывод EXPLAIN ANALYZE';
+            if (textView) textView.textContent = '-- Здесь появится вывод EXPLAIN ANALYZE';
         }
 
         if (!data.rows || data.rows.length === 0) {
@@ -468,10 +529,44 @@ document.addEventListener('DOMContentLoaded', function() {
         resultContainer.innerHTML = tableHTML;
     }
 
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    function displayExplain(explainData, explainText) {
+        const treeView = document.getElementById('explainTreeView');
+        const textView = document.getElementById('explainTextView');
+
+        if (!treeView || !textView) {
+            const explainContainer = document.getElementById('explainContainer');
+            if (explainContainer) {
+                explainContainer.innerHTML = renderExplainTree(explainData);
+            }
+            return;
+        }
+
+        // Рендерим дерево (из JSON)
+        if (explainData && explainData !== explainText) {
+            treeView.innerHTML = renderExplainTree(explainData);
+        } else {
+            treeView.innerHTML = renderExplainTree(explainText);
+        }
+
+        // Рендерим оригинальный текст PostgreSQL
+        if (explainText) {
+            textView.textContent = explainText;
+        } else if (typeof explainData === 'string') {
+            textView.textContent = explainData;
+        } else {
+            textView.textContent = 'Нет данных EXPLAIN';
+        }
+
+        // Устанавливаем активное представление по умолчанию (дерево)
+        treeView.style.display = 'block';
+        textView.style.display = 'none';
+
+        // Обновляем активную кнопку
+        const activeBtn = document.querySelector('.explain-view-btn[data-view="tree"]');
+        if (activeBtn) {
+            document.querySelectorAll('.explain-view-btn').forEach(b => b.classList.remove('active'));
+            activeBtn.classList.add('active');
+        }
     }
 
     function generateSignature(query, time, rows, dbName) {
@@ -583,13 +678,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (executionTime) executionTime.textContent = '';
         if (rowCount) rowCount.textContent = '';
-        if (explainContainer) {
-            explainContainer.innerHTML = '-- Здесь появится вывод EXPLAIN ANALYZE';
+
+        const showExplain = document.getElementById('showExplainCheckbox')?.checked ?? true;
+        const treeView = document.getElementById('explainTreeView');
+        const textView = document.getElementById('explainTextView');
+
+        if (showExplain) {
+            if (treeView) treeView.innerHTML = '-- Здесь появится вывод EXPLAIN ANALYZE';
+            if (textView) textView.textContent = '-- Здесь появится вывод EXPLAIN ANALYZE';
+        } else {
+            if (treeView) treeView.innerHTML = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
+            if (textView) textView.textContent = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
         }
     }
 });
 
-// Глобальные функции
+// ============================================
+// ГЛОБАЛЬНЫЕ ФУНКЦИИ
+// ============================================
+
 function loadDbInfo(dbName) {
     if (!dbName) return;
 
@@ -611,7 +718,6 @@ function loadDbInfo(dbName) {
     currentDbBadge.title = dbName;
     dbInfoCard.style.display = 'block';
 
-    // Сбрасываем счётчик
     if (tablesCountSpan) {
         tablesCountSpan.textContent = '0';
     }
@@ -638,7 +744,6 @@ function loadDbInfo(dbName) {
                 currentTables = data.tables || [];
                 tablesList.innerHTML = '';
 
-                // Обновляем счётчик
                 if (tablesCountSpan) {
                     tablesCountSpan.textContent = currentTables.length;
                 }
@@ -732,14 +837,176 @@ function changeDatabase(dbName) {
     const resultContainer = document.getElementById('resultContainer');
     const executionTime = document.getElementById('executionTime');
     const rowCount = document.getElementById('rowCount');
-    const explainContainer = document.getElementById('explainContainer');
 
     if (resultContainer) {
         resultContainer.innerHTML = '<div class="empty-state">✅ База данных изменена. Выполните запрос.</div>';
     }
     if (executionTime) executionTime.textContent = '';
     if (rowCount) rowCount.textContent = '';
-    if (explainContainer) {
-        explainContainer.innerHTML = '-- Здесь появится вывод EXPLAIN ANALYZE';
+
+    const showExplain = document.getElementById('showExplainCheckbox')?.checked ?? true;
+    const treeView = document.getElementById('explainTreeView');
+    const textView = document.getElementById('explainTextView');
+
+    if (showExplain) {
+        if (treeView) treeView.innerHTML = '-- Здесь появится вывод EXPLAIN ANALYZE';
+        if (textView) textView.textContent = '-- Здесь появится вывод EXPLAIN ANALYZE';
+    } else {
+        if (treeView) treeView.innerHTML = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
+        if (textView) textView.textContent = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
+    }
+}
+
+// ============================================
+// ВИЗУАЛИЗАЦИЯ EXPLAIN
+// ============================================
+
+function renderExplainTree(explainData) {
+    if (!explainData) return '<div class="empty-state">Нет данных EXPLAIN</div>';
+
+    let planData;
+    if (typeof explainData === 'string') {
+        if (explainData.trim().startsWith('[') || explainData.trim().startsWith('{')) {
+            try {
+                planData = JSON.parse(explainData);
+            } catch (e) {
+                return `<pre class="explain-output">${escapeHtml(explainData)}</pre>`;
+            }
+        } else {
+            return `<pre class="explain-output">${escapeHtml(explainData)}</pre>`;
+        }
+    } else {
+        planData = explainData;
+    }
+
+    let plan = null;
+    if (Array.isArray(planData) && planData.length > 0) {
+        plan = planData[0].Plan;
+    } else if (planData.Plan) {
+        plan = planData.Plan;
+    } else if (planData[0] && planData[0].Plan) {
+        plan = planData[0].Plan;
+    }
+
+    if (!plan) {
+        return `<pre class="explain-output">${escapeHtml(JSON.stringify(planData, null, 2))}</pre>`;
+    }
+
+    let html = '<div class="explain-tree">';
+    html += generateSummaryStats(plan);
+    html += renderPlanNode(plan);
+    html += '</div>';
+
+    return html;
+}
+
+function generateSummaryStats(plan) {
+    const totalCost = plan['Total Cost'] || 'N/A';
+    const actualTime = plan['Actual Total Time'] || 'N/A';
+    const actualRows = plan['Actual Rows'] || 'N/A';
+
+    return `
+        <div class="explain-summary-stats">
+            <div class="stat">
+                <span class="stat-label">💰 Общая стоимость:</span>
+                <span class="stat-value">${totalCost}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">⏱️ Фактическое время:</span>
+                <span class="stat-value">${actualTime} ms</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">📊 Строк обработано:</span>
+                <span class="stat-value">${typeof actualRows === 'number' ? actualRows.toLocaleString() : actualRows}</span>
+            </div>
+        </div>
+    `;
+}
+
+function renderPlanNode(node, level = 0) {
+    if (!node) return '';
+
+    const nodeType = node['Node Type'] || 'Unknown';
+    const relationName = node['Relation Name'] || '';
+    const actualRows = node['Actual Rows'] || node['Plan Rows'] || 0;
+    const actualTime = node['Actual Total Time'] || node['Total Cost'] || 0;
+    const actualLoops = node['Actual Loops'] || 1;
+
+    let nodeClass = '';
+    let icon = '📄';
+
+    const typeLower = nodeType.toLowerCase();
+    if (typeLower.includes('index')) {
+        nodeClass = 'explain-node-type-index';
+        icon = '🌲';
+    } else if (typeLower.includes('seq scan')) {
+        nodeClass = 'explain-node-type-seq';
+        icon = '📊';
+    } else if (typeLower.includes('join')) {
+        nodeClass = 'explain-node-type-join';
+        icon = '🔗';
+    } else if (typeLower.includes('aggregate') || typeLower.includes('group')) {
+        nodeClass = 'explain-node-type-aggregate';
+        icon = '📈';
+    } else if (typeLower.includes('sort')) {
+        nodeClass = 'explain-node-type-sort';
+        icon = '🔽';
+    } else if (typeLower.includes('limit')) {
+        nodeClass = 'explain-node-type-limit';
+        icon = '✂️';
+    }
+
+    const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+    const hasChildren = node.Plans && node.Plans.length > 0;
+
+    let html = `
+        <div class="explain-node ${nodeClass}" data-node-type="${nodeType}">
+            <div class="explain-node-header" onclick="toggleExplainNode('${nodeId}')">
+                ${hasChildren ? `<span class="explain-node-toggle" id="toggle_${nodeId}">▼</span>` : '<span class="explain-node-toggle" style="visibility: hidden;">▼</span>'}
+                <span class="explain-node-icon">${icon}</span>
+                <span class="explain-node-name">${escapeHtml(nodeType)}</span>
+                ${relationName ? `<span class="explain-node-relation">(${escapeHtml(relationName)})</span>` : ''}
+            </div>
+            <div class="explain-node-stats">
+                <span>📊 ${typeof actualRows === 'number' ? actualRows.toLocaleString() : actualRows} rows</span>
+                <span>⏱️ ${typeof actualTime === 'number' ? actualTime.toFixed(2) : actualTime} ms</span>
+                ${actualLoops > 1 ? `<span>🔄 loops: ${actualLoops}</span>` : ''}
+                ${node.Condition ? `<span>🔍 condition: ${escapeHtml(node.Condition.substring(0, 50))}${node.Condition.length > 50 ? '...' : ''}</span>` : ''}
+            </div>
+    `;
+
+    if (hasChildren) {
+        html += `<div class="explain-node-children" id="children_${nodeId}">`;
+        for (const child of node.Plans) {
+            html += renderPlanNode(child, level + 1);
+        }
+        html += `</div>`;
+    }
+
+    html += `</div>`;
+
+    if (!window.toggleExplainNodeFunctions) {
+        window.toggleExplainNodeFunctions = {};
+    }
+    window.toggleExplainNodeFunctions[nodeId] = function() {
+        const childrenDiv = document.getElementById(`children_${nodeId}`);
+        const toggleSpan = document.getElementById(`toggle_${nodeId}`);
+        if (childrenDiv) {
+            if (childrenDiv.style.display === 'none') {
+                childrenDiv.style.display = 'block';
+                if (toggleSpan) toggleSpan.textContent = '▼';
+            } else {
+                childrenDiv.style.display = 'none';
+                if (toggleSpan) toggleSpan.textContent = '▶';
+            }
+        }
+    };
+
+    return html;
+}
+
+function toggleExplainNode(nodeId) {
+    if (window.toggleExplainNodeFunctions && window.toggleExplainNodeFunctions[nodeId]) {
+        window.toggleExplainNodeFunctions[nodeId]();
     }
 }
