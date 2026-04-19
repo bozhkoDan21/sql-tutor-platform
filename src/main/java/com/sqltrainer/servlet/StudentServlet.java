@@ -23,8 +23,8 @@ public class StudentServlet extends HttpServlet {
     // Активные сессии студентов (для мониторинга преподавателем)
     private static final ConcurrentHashMap<String, SessionInfo> activeSessions = new ConcurrentHashMap<>();
 
-    // Ограничение частоты запросов (защита от DoS)
-    private static final ConcurrentHashMap<String, Long> lastRequestTime = new ConcurrentHashMap<>();
+    // Ограничение частоты запросов (защита от DoS) - по userId
+    private static final ConcurrentHashMap<Long, Long> lastRequestTime = new ConcurrentHashMap<>();
     private static final long MIN_REQUEST_INTERVAL_MS = 1000; // минимум 1 секунда между запросами
 
     // Агрегированная статистика запросов
@@ -79,18 +79,26 @@ public class StudentServlet extends HttpServlet {
             return;
         }
 
+        // Получаем userId из атрибута (установлен в JwtAuthFilter)
+        Long userId = (Long) req.getAttribute("userId");
+        if (userId == null) {
+            resp.getWriter().write("{\"error\":\"User not authenticated\"}");
+            return;
+        }
+
         HttpSession session = req.getSession(true);
         String sessionId = session.getId();
 
-        // Ограничение частоты запросов
-        Long lastRequest = lastRequestTime.get(sessionId);
+        // Rate limiting по userId
+        Long lastRequest = lastRequestTime.get(userId);
         if (lastRequest != null && System.currentTimeMillis() - lastRequest < MIN_REQUEST_INTERVAL_MS) {
-            log.warn("Rate limit exceeded for session {}", sessionId);
+            log.warn("Rate limit exceeded for user {}", userId);
             resp.getWriter().write("{\"error\":\"Too many requests. Please wait before sending another query.\"}");
             return;
         }
-        lastRequestTime.put(sessionId, System.currentTimeMillis());
+        lastRequestTime.put(userId, System.currentTimeMillis());
 
+        // Периодическая очистка старых записей частоты
         if (lastRequestTime.size() > 1000) {
             cleanOldRateLimits();
         }
@@ -99,7 +107,7 @@ public class StudentServlet extends HttpServlet {
         cleanOldSessions();
 
         if (log.isDebugEnabled()) {
-            log.debug("Executing query on {} from session {}: {}", dbName, sessionId,
+            log.debug("Executing query on {} from user {}: {}", dbName, userId,
                     query.length() > 100 ? query.substring(0, 100) + "..." : query);
         }
 
@@ -122,7 +130,7 @@ public class StudentServlet extends HttpServlet {
     }
 
     private void cleanOldRateLimits() {
-        long cutoff = System.currentTimeMillis() - 60 * 1000;
+        long cutoff = System.currentTimeMillis() - 60 * 1000; // старше минуты
         lastRequestTime.entrySet().removeIf(entry -> entry.getValue() < cutoff);
     }
 }
