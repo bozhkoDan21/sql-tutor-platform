@@ -31,8 +31,17 @@ public class TeacherServlet extends HttpServlet {
     private final Gson gson = new Gson();
 
     private static final Set<String> ALLOWED_EXTENSIONS = Collections.singleton("sql");
-    private static final int MAX_SCRIPT_LENGTH = 10_000_000;
+    private static final int MAX_SCRIPT_LENGTH = 2_000_000; // Уменьшено до 2MB
     private static final Pattern DB_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
+
+    // Защищённые учебные базы данных
+    private static final Set<String> PROTECTED_DATABASES = new HashSet<>(Arrays.asList(
+            "sql_tutor_university_db",
+            "archaeology_10m",
+            "postgres",
+            "template0",
+            "template1"
+    ));
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -99,6 +108,13 @@ public class TeacherServlet extends HttpServlet {
             response.put("error", "Database name is required");
             return;
         }
+
+        // Запрет на создание защищённых баз
+        if (PROTECTED_DATABASES.contains(dbName.toLowerCase())) {
+            response.put("error", "Cannot create database with reserved name: " + dbName);
+            return;
+        }
+
         if (!DB_NAME_PATTERN.matcher(dbName).matches()) {
             response.put("error", "Database name can only contain letters, numbers and underscores");
             return;
@@ -121,7 +137,7 @@ public class TeacherServlet extends HttpServlet {
 
         String script = readSqlScript(filePart);
         if (script.length() > MAX_SCRIPT_LENGTH) {
-            response.put("error", "SQL script too large (max 10MB)");
+            response.put("error", "SQL script too large (max 2MB)");
             return;
         }
         if (!isValidSqlContent(script)) {
@@ -152,7 +168,7 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
-        // Выполнение SQL скрипта
+        // ИСПРАВЛЕНО: используем проверенное dbName, а не originalDbName
         try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, dbName);
              Statement stmt = dbConn.createStatement()) {
 
@@ -225,14 +241,15 @@ public class TeacherServlet extends HttpServlet {
         }
     }
 
-    private void grantStudentAccess(Connection conn, String quotedDbName, String originalDbName) throws SQLException {
+    private void grantStudentAccess(Connection conn, String quotedDbName, String dbName) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
             String grantConnectSql = "GRANT CONNECT ON DATABASE " + quotedDbName + " TO students";
             log.debug("Executing: {}", grantConnectSql);
             stmt.executeUpdate(grantConnectSql);
         }
 
-        try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, originalDbName);
+        // ИСПРАВЛЕНО: используем проверенное dbName
+        try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, dbName);
              Statement stmt = dbConn.createStatement()) {
             stmt.executeUpdate("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO students");
         }
@@ -348,9 +365,15 @@ public class TeacherServlet extends HttpServlet {
     }
 
     private void handleDelete(Connection conn, String dbName, Map<String, Object> response) {
-        if (dbName == null || dbName.isEmpty() ||
-                dbName.equals("postgres") || dbName.equals("template0") || dbName.equals("template1")) {
-            response.put("error", "Cannot delete system database");
+        if (dbName == null || dbName.isEmpty()) {
+            response.put("error", "Database name is required");
+            return;
+        }
+
+        // ИСПРАВЛЕНО: защита системных и учебных баз данных
+        if (PROTECTED_DATABASES.contains(dbName.toLowerCase())) {
+            response.put("error", "Cannot delete protected database: " + dbName +
+                    ". This is a system or demo database required for learning.");
             return;
         }
 

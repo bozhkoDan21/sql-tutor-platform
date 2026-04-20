@@ -20,10 +20,21 @@ import java.util.Date;
 public class JwtUtil {
     private static final Logger log = LoggerFactory.getLogger(JwtUtil.class);
 
-    // Настройки из переменных окружения
-    private static final String SECRET = System.getenv().getOrDefault("JWT_SECRET",
-            "sql-trainer-super-secret-key-2024-must-be-at-least-256-bits-long");
-    private static final SecretKey KEY = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+    // ИСПРАВЛЕНО: без дефолтного значения, только из переменных окружения
+    private static final String SECRET;
+    private static final SecretKey KEY;
+
+    static {
+        SECRET = System.getenv("JWT_SECRET");
+        if (SECRET == null || SECRET.length() < 32) {
+            String error = "JWT_SECRET must be set in environment variables (min 32 chars). " +
+                    "Generate with: openssl rand -base64 32";
+            log.error(error);
+            throw new RuntimeException(error);
+        }
+        KEY = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+        log.info("JWT Util initialized successfully");
+    }
 
     private static final long ACCESS_TOKEN_EXPIRY_HOURS = Long.parseLong(
             System.getenv().getOrDefault("JWT_ACCESS_TOKEN_EXPIRY_HOURS", "1"));

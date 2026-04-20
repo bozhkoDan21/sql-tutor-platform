@@ -1,5 +1,6 @@
 package com.sqltrainer.servlet;
 
+import com.sqltrainer.config.DatabaseConfig;
 import com.sqltrainer.util.QueryExecutor;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
@@ -11,7 +12,14 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @WebServlet("/api/execute")
@@ -30,6 +38,12 @@ public class StudentServlet extends HttpServlet {
     // Агрегированная статистика запросов
     private static int queryCounter = 0;
     private static long lastLogTime = System.currentTimeMillis();
+
+    // ИСПРАВЛЕНО: список разрешённых для студентов баз данных
+    private static final Set<String> ALLOWED_DATABASES = new HashSet<>(Arrays.asList(
+            "sql_tutor_university_db",
+            "archaeology_10m"
+    ));
 
     public static class SessionInfo {
         private final String sessionId;
@@ -86,6 +100,13 @@ public class StudentServlet extends HttpServlet {
             return;
         }
 
+        // ИСПРАВЛЕНО: проверка доступа к базе данных
+        if (!isDatabaseAccessibleToStudent(dbName, userId)) {
+            log.warn("User {} attempted to access unauthorized database: {}", userId, dbName);
+            resp.getWriter().write("{\"error\":\"Access denied to database: " + dbName + "\"}");
+            return;
+        }
+
         HttpSession session = req.getSession(true);
         String sessionId = session.getId();
 
@@ -121,6 +142,35 @@ public class StudentServlet extends HttpServlet {
             queryCounter = 0;
             lastLogTime = System.currentTimeMillis();
         }
+    }
+
+    /**
+     * ИСПРАВЛЕНО: проверка доступа студента к базе данных
+     */
+    private boolean isDatabaseAccessibleToStudent(String dbName, Long userId) {
+        // Проверка по списку разрешённых баз
+        if (ALLOWED_DATABASES.contains(dbName)) {
+            return true;
+        }
+
+        // Дополнительная проверка через права PostgreSQL
+        try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.ADMIN, null)) {
+            String sql = "SELECT has_database_privilege($1, $2, 'CONNECT')";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, "students");
+                stmt.setString(2, dbName);
+                ResultSet rs = stmt.executeQuery();
+                if (rs.next() && rs.getBoolean(1)) {
+                    log.debug("User {} granted access to database {} via PostgreSQL privileges", userId, dbName);
+                    return true;
+                }
+            }
+        } catch (SQLException e) {
+            log.warn("Failed to check database access for {}: {}", dbName, e.getMessage());
+        }
+
+        log.warn("User {} denied access to database {}", userId, dbName);
+        return false;
     }
 
     private void cleanOldSessions() {
