@@ -460,8 +460,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.error) {
                 const hint = getErrorHint(query, data.error);
                 resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">
-                    ❌ Ошибка: ${data.error}<br><br>
-                    <span style="color: #f59e0b; font-size: 0.9rem;">${hint.replace(/\n/g, '<br>')}</span>
+                    ❌ Ошибка: ${escapeHtml(data.error)}<br><br>
+                    <span style="color: #f59e0b; font-size: 0.9rem;">${escapeHtml(hint)}</span>
                 </div>`;
             } else {
                 displayResults(data);
@@ -520,7 +520,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (value === null) value = 'NULL';
                 else if (typeof value === 'object') value = JSON.stringify(value);
                 else value = escapeHtml(String(value));
-                tableHTML += `<td title="${value}">${value.length > 100 ? value.substring(0, 100) + '...' : value}</td>`;
+                let displayValue = value.length > 100 ? value.substring(0, 100) + '...' : value;
+                tableHTML += `<td title="${escapeHtml(value)}">${escapeHtml(displayValue)}</td>`;
             });
             tableHTML += '</tr>';
         });

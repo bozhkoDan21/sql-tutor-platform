@@ -287,6 +287,17 @@
     </main>
 
     <script>
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            });
+        }
+
         function getAccessToken() {
             return localStorage.getItem('accessToken');
         }
@@ -465,7 +476,7 @@
                             var shortQuery = s.lastQuery.length > 50 ? s.lastQuery.substring(0, 50) + '...' : s.lastQuery;
                             html += '<tr>';
                             html += '<td>' + s.sessionId.substring(0, 8) + '...</td>';
-                            html += '<td title="' + s.lastQuery.replace(/"/g, '&quot;') + '">' + shortQuery + '</td>';
+                            html += '<td title="' + escapeHtml(s.lastQuery) + '">' + escapeHtml(shortQuery) + '</td>';
                             html += '<td>' + time + '</td>';
                             html += '</tr>';
                         }

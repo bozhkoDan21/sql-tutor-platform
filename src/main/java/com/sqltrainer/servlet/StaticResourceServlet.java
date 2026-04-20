@@ -6,11 +6,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
-@WebServlet("*.css")
+@WebServlet({ "*.css", "*.js" })  // ← Обрабатываем и CSS, и JS
 public class StaticResourceServlet extends HttpServlet {
 
     @Override
@@ -30,26 +27,7 @@ public class StaticResourceServlet extends HttpServlet {
         resp.setCharacterEncoding("UTF-8");
 
         // Пробуем найти файл
-        InputStream is = null;
-
-        // Способ 1: через ServletContext
-        is = getServletContext().getResourceAsStream(path);
-
-        // Способ 2: через реальный путь
-        if (is == null) {
-            try {
-                String realPath = getServletContext().getRealPath(path);
-                if (realPath != null) {
-                    Path filePath = Paths.get(realPath);
-                    if (Files.exists(filePath)) {
-                        Files.copy(filePath, resp.getOutputStream());
-                        return;
-                    }
-                }
-            } catch (Exception e) {
-                // Игнорируем
-            }
-        }
+        InputStream is = getServletContext().getResourceAsStream(path);
 
         if (is == null) {
             resp.sendError(404, "File not found: " + path);
