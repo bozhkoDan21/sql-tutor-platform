@@ -1,17 +1,19 @@
 FROM postgres:15
 
-# Установка plpython3u и зависимостей
+# Установка plpython3u, pgcrypto и зависимостей
 RUN apt-get update && \
     apt-get install -y \
         postgresql-plpython3-15 \
+        postgresql-contrib-15 \
         python3 \
         python3-pip \
         && rm -rf /var/lib/apt/lists/*
 
-# Создаем расширение при старте
+# Создаем расширения при старте
 RUN echo "CREATE EXTENSION IF NOT EXISTS plpython3u;" > /docker-entrypoint-initdb.d/01-init-extensions.sql
+RUN echo "CREATE EXTENSION IF NOT EXISTS pgcrypto;" >> /docker-entrypoint-initdb.d/01-init-extensions.sql
 
 # Копируем основной скрипт
-COPY scripts/setup_database.sql /docker-entrypoint-initdb.d/02-setup.sql
+COPY scripts/db/setup_database.sql /docker-entrypoint-initdb.d/02-setup.sql
 
 EXPOSE 5432
