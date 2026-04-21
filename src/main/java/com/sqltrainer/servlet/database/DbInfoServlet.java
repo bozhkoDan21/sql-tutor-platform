@@ -2,6 +2,7 @@ package com.sqltrainer.servlet.database;
 
 import com.sqltrainer.config.DatabaseConfig;
 import com.google.gson.Gson;
+import com.sqltrainer.util.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,6 +18,10 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.regex.Pattern;
 
+/**
+ * Сервлет для получения информации о базе данных.
+ * Возвращает список таблиц в указанной базе данных.
+ */
 @WebServlet("/api/dbinfo")
 public class DbInfoServlet extends HttpServlet {
 
@@ -37,7 +42,7 @@ public class DbInfoServlet extends HttpServlet {
             return;
         }
 
-        // ВАЛИДАЦИЯ: защита от SQL-инъекций
+        // Валидация имени базы данных
         if (!isValidDatabaseName(dbName)) {
             log.warn("Invalid database name: {}", dbName);
             resp.getWriter().write("{\"error\":\"Invalid database name\"}");
@@ -79,6 +84,10 @@ public class DbInfoServlet extends HttpServlet {
         resp.getWriter().write(gson.toJson(result));
     }
 
+    /**
+     * Проверяет корректность имени базы данных.
+     * Запрещает системные базы данных PostgreSQL.
+     */
     private boolean isValidDatabaseName(String name) {
         if (name == null || name.isEmpty()) {
             return false;
@@ -86,8 +95,8 @@ public class DbInfoServlet extends HttpServlet {
         if (name.length() > 63) {
             return false;
         }
-        // Защита от системных БД
-        String[] systemDbs = {"postgres", "template0", "template1"};
+        // Защита от системных баз данных
+        String[] systemDbs = Constants.SYSTEM_DATABASES;
         for (String systemDb : systemDbs) {
             if (name.equalsIgnoreCase(systemDb)) {
                 return false;

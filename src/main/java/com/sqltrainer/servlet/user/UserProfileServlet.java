@@ -16,6 +16,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+/**
+ * Сервлет для управления профилем пользователя.
+ * Позволяет просматривать и обновлять личную информацию, а также менять пароль.
+ */
 @WebServlet("/api/user/*")
 public class UserProfileServlet extends HttpServlet {
 
@@ -56,6 +60,10 @@ public class UserProfileServlet extends HttpServlet {
         }
     }
 
+    /**
+     * Возвращает информацию о текущем пользователе.
+     * ФИО разбивается на фамилию, имя и отчество для удобства редактирования.
+     */
     private void handleGetProfile(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         Long userId = (Long) req.getAttribute("userId");
 
@@ -99,6 +107,9 @@ public class UserProfileServlet extends HttpServlet {
         }
     }
 
+    /**
+     * Разбирает полное имя на составляющие (фамилия, имя, отчество).
+     */
     private String[] parseFullName(String fullName) {
         String[] result = {"", "", ""};
         if (fullName != null && !fullName.isEmpty()) {
@@ -110,6 +121,9 @@ public class UserProfileServlet extends HttpServlet {
         return result;
     }
 
+    /**
+     * Собирает полное имя из фамилии, имени и отчества.
+     */
     private String buildFullName(String lastName, String firstName, String patronymic) {
         StringBuilder sb = new StringBuilder();
         if (lastName != null && !lastName.isEmpty()) sb.append(lastName);
@@ -124,11 +138,18 @@ public class UserProfileServlet extends HttpServlet {
         return sb.toString();
     }
 
+    /**
+     * Проверяет корректность формата email.
+     */
     private boolean isValidEmail(String email) {
         if (email == null || email.isEmpty()) return false;
         return EMAIL_PATTERN.matcher(email).matches();
     }
 
+    /**
+     * Проверяет сложность пароля.
+     * Требования: минимум 8 символов, заглавная буква, строчная буква, цифра, спецсимвол.
+     */
     private boolean isStrongPassword(String password) {
         if (password == null || password.length() < 8) return false;
         boolean hasUpper = false;
@@ -146,6 +167,10 @@ public class UserProfileServlet extends HttpServlet {
         return hasUpper && hasLower && hasDigit && hasSpecial;
     }
 
+    /**
+     * Обновляет профиль пользователя.
+     * Позволяет изменить ФИО, email и пароль (с подтверждением текущего).
+     */
     private void handleUpdateProfile(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         Long userId = (Long) req.getAttribute("userId");
         String body = req.getReader().lines().reduce("", (a, b) -> a + b);
@@ -176,6 +201,7 @@ public class UserProfileServlet extends HttpServlet {
                 }
             }
 
+            // Смена пароля
             if (newPassword != null && !newPassword.isEmpty()) {
                 if (currentPassword == null || currentPassword.isEmpty()) {
                     resp.getWriter().write("{\"error\":\"Current password is required to change password\"}");
@@ -207,6 +233,7 @@ public class UserProfileServlet extends HttpServlet {
                     stmt.executeUpdate();
                 }
             } else {
+                // Обновление без смены пароля
                 String sql = "UPDATE users SET full_name = ?, email = ? WHERE id = ?";
                 try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                     stmt.setString(1, fullName);

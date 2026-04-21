@@ -17,6 +17,10 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.*;
 
+/**
+ * Сервлет для получения списка доступных учебных баз данных.
+ * Исключает системные базы PostgreSQL (template0, template1, postgres).
+ */
 @WebServlet("/api/databases")
 public class DatabaseListServlet extends HttpServlet {
 
@@ -56,7 +60,7 @@ public class DatabaseListServlet extends HttpServlet {
             response.put("success", false);
             response.put("error", "Failed to load databases: " + e.getMessage());
 
-            // При ошибке подключения очищаем кеш, так как данные могли измениться
+            // При ошибке подключения очищаем кеш
             QueryExecutor.clearCache();
         }
 

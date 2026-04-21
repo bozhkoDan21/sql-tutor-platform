@@ -7,6 +7,10 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 
+/**
+ * Сервлет для отдачи статических ресурсов (CSS, JS).
+ * Ищет файлы сначала в корне webapp, затем в папках /css и /js.
+ */
 @WebServlet({ "*.css", "*.js" })
 public class StaticResourceServlet extends HttpServlet {
 
@@ -16,7 +20,7 @@ public class StaticResourceServlet extends HttpServlet {
 
         String path = req.getServletPath();
 
-        // Устанавливаем правильный Content-Type
+        // Устанавливаем правильный MIME-тип
         if (path.endsWith(".css")) {
             resp.setContentType("text/css");
         } else if (path.endsWith(".js")) {
@@ -26,17 +30,18 @@ public class StaticResourceServlet extends HttpServlet {
         }
         resp.setCharacterEncoding("UTF-8");
 
-        // Пробуем найти файл в разных местах
+        // Поиск файла в разных местах
         InputStream is = null;
 
         // Сначала ищем в корне
         is = getServletContext().getResourceAsStream(path);
 
-        // Если не нашли, ищем в папке css или js
+        // Если не нашли, ищем в папке css для .css файлов
         if (is == null && path.endsWith(".css")) {
             is = getServletContext().getResourceAsStream("/css" + path);
         }
 
+        // Если не нашли, ищем в папке js для .js файлов
         if (is == null && path.endsWith(".js")) {
             is = getServletContext().getResourceAsStream("/js" + path);
         }
@@ -46,7 +51,7 @@ public class StaticResourceServlet extends HttpServlet {
             return;
         }
 
-        // Отдаём файл
+        // Отдаём файл клиенту
         byte[] buffer = new byte[8192];
         int bytesRead;
         while ((bytesRead = is.read(buffer)) != -1) {

@@ -1,6 +1,7 @@
 package com.sqltrainer.servlet.student;
 
 import com.sqltrainer.config.DatabaseConfig;
+import com.sqltrainer.util.Constants;
 import com.sqltrainer.util.QueryExecutor;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
@@ -22,29 +23,36 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.sqltrainer.util.Constants.*;
+
+/**
+ * Сервлет для выполнения SQL-запросов студентами.
+ * Поддерживает только SELECT запросы, ограничивает время выполнения и количество строк.
+ */
 @WebServlet("/api/execute")
 public class StudentServlet extends HttpServlet {
 
     private static final Logger log = LoggerFactory.getLogger(StudentServlet.class);
     private final Gson gson = new Gson();
 
-    // Активные сессии студентов (для мониторинга преподавателем)
+    // Активные сессии студентов для мониторинга преподавателем
     private static final ConcurrentHashMap<String, SessionInfo> activeSessions = new ConcurrentHashMap<>();
 
-    // Ограничение частоты запросов (защита от DoS) - по userId
+    // Ограничение частоты запросов для защиты от DoS
     private static final ConcurrentHashMap<Long, Long> lastRequestTime = new ConcurrentHashMap<>();
-    private static final long MIN_REQUEST_INTERVAL_MS = 1000; // минимум 1 секунда между запросами
 
-    // Агрегированная статистика запросов
+    // Статистика запросов
     private static int queryCounter = 0;
     private static long lastLogTime = System.currentTimeMillis();
 
-    // ИСПРАВЛЕНО: список разрешённых для студентов баз данных
+    // Список баз данных, доступных студентам
     private static final Set<String> ALLOWED_DATABASES = new HashSet<>(Arrays.asList(
-            "sql_tutor_university_db",
-            "archaeology_10m"
+            Constants.ALLOWED_STUDENT_DATABASES
     ));
 
+    /**
+     * Информация о сессии студента для преподавателя.
+     */
     public static class SessionInfo {
         private final String sessionId;
         private final String lastQuery;
@@ -88,19 +96,18 @@ public class StudentServlet extends HttpServlet {
             return;
         }
 
-        if (query.length() > 10000) {
+        if (query.length() > Constants.MAX_QUERY_LENGTH) {
             resp.getWriter().write("{\"error\":\"Query too long (max 10000 characters)\"}");
             return;
         }
 
-        // Получаем userId из атрибута (установлен в JwtAuthFilter)
         Long userId = (Long) req.getAttribute("userId");
         if (userId == null) {
             resp.getWriter().write("{\"error\":\"User not authenticated\"}");
             return;
         }
 
-        // ИСПРАВЛЕНО: проверка доступа к базе данных
+        // Проверка доступа к базе данных
         if (!isDatabaseAccessibleToStudent(dbName, userId)) {
             log.warn("User {} attempted to access unauthorized database: {}", userId, dbName);
             resp.getWriter().write("{\"error\":\"Access denied to database: " + dbName + "\"}");
@@ -110,7 +117,7 @@ public class StudentServlet extends HttpServlet {
         HttpSession session = req.getSession(true);
         String sessionId = session.getId();
 
-        // Rate limiting по userId
+        // Rate limiting
         Long lastRequest = lastRequestTime.get(userId);
         if (lastRequest != null && System.currentTimeMillis() - lastRequest < MIN_REQUEST_INTERVAL_MS) {
             log.warn("Rate limit exceeded for user {}", userId);
@@ -119,7 +126,6 @@ public class StudentServlet extends HttpServlet {
         }
         lastRequestTime.put(userId, System.currentTimeMillis());
 
-        // Периодическая очистка старых записей частоты
         if (lastRequestTime.size() > 1000) {
             cleanOldRateLimits();
         }
@@ -145,15 +151,14 @@ public class StudentServlet extends HttpServlet {
     }
 
     /**
-     * ИСПРАВЛЕНО: проверка доступа студента к базе данных
+     * Проверяет, имеет ли студент доступ к указанной базе данных.
+     * Сначала проверяет по списку разрешённых баз, затем через права PostgreSQL.
      */
     private boolean isDatabaseAccessibleToStudent(String dbName, Long userId) {
-        // Проверка по списку разрешённых баз
         if (ALLOWED_DATABASES.contains(dbName)) {
             return true;
         }
 
-        // Дополнительная проверка через права PostgreSQL
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.ADMIN, null)) {
             String sql = "SELECT has_database_privilege($1, $2, 'CONNECT')";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -173,14 +178,20 @@ public class StudentServlet extends HttpServlet {
         return false;
     }
 
+    /**
+     * Удаляет сессии старше 30 минут.
+     */
     private void cleanOldSessions() {
-        long cutoff = System.currentTimeMillis() - 30 * 60 * 1000;
+        long cutoff = System.currentTimeMillis() - Constants.SESSION_TTL_MS;
         activeSessions.entrySet().removeIf(entry ->
                 entry.getValue().lastAccess.getTime() < cutoff);
     }
 
+    /**
+     * Удаляет записи rate limiting старше 1 минуты.
+     */
     private void cleanOldRateLimits() {
-        long cutoff = System.currentTimeMillis() - 60 * 1000; // старше минуты
+        long cutoff = System.currentTimeMillis() - Constants.RATE_LIMIT_TTL_MS;
         lastRequestTime.entrySet().removeIf(entry -> entry.getValue() < cutoff);
     }
 }

@@ -9,6 +9,10 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
+/**
+ * Фильтр для ограничения доступа к API преподавателя.
+ * Требует наличие роли "teacher" у аутентифицированного пользователя.
+ */
 @WebFilter({"/api/teacher/*"})
 public class TeacherFilter implements Filter {
 
@@ -26,6 +30,7 @@ public class TeacherFilter implements Filter {
         HttpServletRequest req = (HttpServletRequest) request;
         HttpServletResponse resp = (HttpServletResponse) response;
 
+        // Роль устанавливается в JwtAuthFilter
         String role = (String) req.getAttribute("role");
 
         if (role == null) {

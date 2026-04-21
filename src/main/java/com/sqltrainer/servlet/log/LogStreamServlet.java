@@ -1,6 +1,7 @@
 package com.sqltrainer.servlet.log;
 
 import com.sqltrainer.servlet.teacher.TeacherServlet;
+import com.sqltrainer.util.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,13 +17,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Сервлет для потоковой передачи логов в реальном времени (Server-Sent Events).
- * <p>
  * Используется преподавателем для отслеживания прогресса выполнения SQL-скриптов
- * при загрузке новой базы данных. Поддерживает heartbeat для предотвращения
- * разрыва соединения.
- * </p>
- *
- * @see TeacherServlet
+ * при загрузке новой базы данных.
  */
 @WebServlet("/api/logs")
 public class LogStreamServlet extends HttpServlet {
@@ -30,8 +26,12 @@ public class LogStreamServlet extends HttpServlet {
     private static final Logger log = LoggerFactory.getLogger(LogStreamServlet.class);
 
     private static final BlockingQueue<String> logQueue = new LinkedBlockingQueue<>();
-    private static final int MAX_QUEUE_SIZE = 10000;
+    private static final int MAX_QUEUE_SIZE = Constants.LOG_QUEUE_MAX_SIZE;
 
+    /**
+     * Добавляет сообщение в очередь логов.
+     * Вызывается из TeacherServlet во время выполнения SQL-скрипта.
+     */
     public static void addLog(String message) {
         if (logQueue.size() >= MAX_QUEUE_SIZE) {
             log.warn("Log queue size limit reached, clearing old messages");
@@ -42,6 +42,7 @@ public class LogStreamServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        // Настройка Server-Sent Events
         resp.setContentType("text/event-stream");
         resp.setCharacterEncoding("UTF-8");
         resp.setHeader("Cache-Control", "no-cache");
@@ -49,25 +50,24 @@ public class LogStreamServlet extends HttpServlet {
         resp.setHeader("Keep-Alive", "timeout=30");
 
         PrintWriter writer = resp.getWriter();
-
         long lastCleanupTime = System.currentTimeMillis();
 
         while (true) {
-            // Периодическая очистка очереди
-            if (System.currentTimeMillis() - lastCleanupTime > 60000) {
+            // Периодическая очистка очереди от старых сообщений
+            if (System.currentTimeMillis() - lastCleanupTime > Constants.LOG_CLEANUP_INTERVAL_MS) {
                 cleanupLogQueue();
                 lastCleanupTime = System.currentTimeMillis();
             }
 
             String logMessage;
             try {
-                logMessage = logQueue.poll(30, TimeUnit.SECONDS);
+                logMessage = logQueue.poll(Constants.LOG_POLL_TIMEOUT_SEC, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
             }
 
-            // Отправка сообщения
+            // Отправка heartbeat или сообщения клиенту
             if (logMessage == null) {
                 writer.write(": heartbeat\n\n");
             } else {
@@ -85,6 +85,10 @@ public class LogStreamServlet extends HttpServlet {
         writer.close();
     }
 
+    /**
+     * Очищает очередь логов, если она превышает максимальный размер.
+     * Удаляет половину старых сообщений.
+     */
     private void cleanupLogQueue() {
         int sizeBefore = logQueue.size();
         if (sizeBefore > MAX_QUEUE_SIZE) {

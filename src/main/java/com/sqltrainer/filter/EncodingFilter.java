@@ -1,11 +1,17 @@
 package com.sqltrainer.filter;
 
+import com.sqltrainer.util.Constants;
+
 import javax.servlet.*;
 import javax.servlet.annotation.WebFilter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
+/**
+ * Фильтр для установки кодировки UTF-8 и защитных HTTP-заголовков.
+ * Обрабатывает все запросы к приложению.
+ */
 @WebFilter("/*")
 public class EncodingFilter implements Filter {
 
@@ -35,18 +41,19 @@ public class EncodingFilter implements Filter {
         resp.setCharacterEncoding("UTF-8");
         resp.setContentType("text/html; charset=UTF-8");
 
-        // Защитные заголовки только для HTML
-        resp.setHeader("Content-Security-Policy",
-                "default-src 'self'; " +
-                        "script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline' 'unsafe-eval'; " +
-                        "style-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; " +
-                        "img-src 'self' data:; " +
-                        "font-src 'self' data:; " +
-                        "connect-src 'self'");
+        // Защитные заголовки для предотвращения XSS и кликджекинга
+        resp.setHeader("Content-Security-Policy", Constants.CSP_POLICY);
 
+        // Запрещает браузеру подменять MIME-тип
         resp.setHeader("X-Content-Type-Options", "nosniff");
+
+        // Запрещает встраивание страницы в frame (защита от кликджекинга)
         resp.setHeader("X-Frame-Options", "DENY");
+
+        // Включает встроенный XSS-фильтр браузера
         resp.setHeader("X-XSS-Protection", "1; mode=block");
+
+        // Отключает кэширование для динамических страниц
         resp.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         resp.setHeader("Pragma", "no-cache");
         resp.setHeader("Expires", "0");

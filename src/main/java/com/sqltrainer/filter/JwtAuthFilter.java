@@ -10,15 +10,20 @@ import javax.servlet.annotation.WebFilter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.sql.*;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * JWT аутентификационный фильтр.
+ * Проверяет наличие и валидность JWT токена в заголовке Authorization.
+ * Для публичных эндпоинтов аутентификация не требуется.
+ */
 @WebFilter("/api/*")
 public class JwtAuthFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
 
+    // Эндпоинты, доступные без аутентификации
     private static final List<String> PUBLIC_ENDPOINTS = Arrays.asList(
             "/api/auth/login",
             "/api/auth/refresh"
@@ -33,13 +38,13 @@ public class JwtAuthFilter implements Filter {
 
         String path = req.getRequestURI();
 
-        // Публичные эндпоинты — пропускаем без токена
+        // Публичные эндпоинты пропускаем без токена
         if (isPublicEndpoint(path)) {
             chain.doFilter(request, response);
             return;
         }
 
-        // Получаем токен из заголовка
+        // Получаем токен из заголовка Authorization: Bearer <token>
         String authHeader = req.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             sendUnauthorized(resp, "Missing or invalid token");
@@ -58,7 +63,7 @@ public class JwtAuthFilter implements Filter {
             String role = JwtUtil.getRoleFromToken(token);
             String login = JwtUtil.getLoginFromToken(token);
 
-            // Устанавливаем атрибуты для дальнейшего использования
+            // Сохраняем данные пользователя в атрибутах запроса для дальнейшего использования
             req.setAttribute("userId", userId);
             req.setAttribute("role", role);
             req.setAttribute("login", login);
@@ -74,6 +79,9 @@ public class JwtAuthFilter implements Filter {
         }
     }
 
+    /**
+     * Проверяет, является ли запрошенный путь публичным эндпоинтом.
+     */
     private boolean isPublicEndpoint(String path) {
         for (String endpoint : PUBLIC_ENDPOINTS) {
             if (path.startsWith(endpoint)) {
@@ -83,6 +91,9 @@ public class JwtAuthFilter implements Filter {
         return false;
     }
 
+    /**
+     * Отправляет ответ с кодом 401 Unauthorized.
+     */
     private void sendUnauthorized(HttpServletResponse resp, String message) throws IOException {
         resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         resp.setContentType("application/json");

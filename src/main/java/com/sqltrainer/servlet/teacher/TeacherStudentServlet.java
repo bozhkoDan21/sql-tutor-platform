@@ -6,6 +6,7 @@ import com.google.gson.GsonBuilder;
 import org.mindrot.jbcrypt.BCrypt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.sqltrainer.util.Constants;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -15,22 +16,22 @@ import java.io.IOException;
 import java.sql.*;
 import java.util.*;
 
+/**
+ * Сервлет для управления студентами преподавателем.
+ * Позволяет генерировать, просматривать, редактировать и удалять студентов.
+ */
 @WebServlet("/api/teacher/students/*")
 public class TeacherStudentServlet extends HttpServlet {
 
     private static final Logger log = LoggerFactory.getLogger(TeacherStudentServlet.class);
     private final Gson gson = new GsonBuilder().disableHtmlEscaping().create();
 
-    private static final String UPPERCASE = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-    private static final String LOWERCASE = "abcdefghijkmnpqrstuvwxyz";
-    private static final String DIGITS = "23456789";
-    private static final String SPECIAL = "!@#$%^&*";
+    // Настройки генерации паролей
+    private static final String UPPERCASE = Constants.PASSWORD_UPPERCASE;
+    private static final String LOWERCASE = Constants.PASSWORD_LOWERCASE;
+    private static final String DIGITS = Constants.PASSWORD_DIGITS;
+    private static final String SPECIAL = Constants.PASSWORD_SPECIAL;
     private static final String ALL_CHARS = UPPERCASE + LOWERCASE + DIGITS + SPECIAL;
-    private static final int PASSWORD_LENGTH = 10;
-
-    // ============================================
-    // ОСНОВНЫЕ МЕТОДЫ
-    // ============================================
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -102,10 +103,10 @@ public class TeacherStudentServlet extends HttpServlet {
         }
     }
 
-    // ============================================
-    // ГЕНЕРАЦИЯ СТУДЕНТОВ
-    // ============================================
-
+    /**
+     * Генерирует указанное количество студентов для группы.
+     * Пароли генерируются случайным образом и отображаются только один раз.
+     */
     private void handleGenerateStudents(HttpServletRequest req, HttpServletResponse resp, Map<String, Object> response) throws IOException {
         String groupName = req.getParameter("groupName");
         int count = Integer.parseInt(req.getParameter("count"));
@@ -118,7 +119,7 @@ public class TeacherStudentServlet extends HttpServlet {
             return;
         }
 
-        if (count < 1 || count > 100) {
+        if (count < 1 || count > Constants.MAX_STUDENTS_PER_GENERATION) {
             response.put("error", "Count must be between 1 and 100");
             resp.getWriter().write(gson.toJson(response));
             return;
@@ -138,6 +139,10 @@ public class TeacherStudentServlet extends HttpServlet {
         resp.getWriter().write(gson.toJson(response));
     }
 
+    /**
+     * Генерирует безопасный пароль, содержащий заглавные и строчные буквы,
+     * цифры и специальные символы.
+     */
     private String generateSecurePassword() {
         Random random = new Random();
         StringBuilder password = new StringBuilder();
@@ -147,7 +152,7 @@ public class TeacherStudentServlet extends HttpServlet {
         password.append(DIGITS.charAt(random.nextInt(DIGITS.length())));
         password.append(SPECIAL.charAt(random.nextInt(SPECIAL.length())));
 
-        for (int i = 4; i < PASSWORD_LENGTH; i++) {
+        for (int i = 4; i < Constants.GENERATED_PASSWORD_LENGTH; i++) {
             password.append(ALL_CHARS.charAt(random.nextInt(ALL_CHARS.length())));
         }
 
@@ -162,6 +167,9 @@ public class TeacherStudentServlet extends HttpServlet {
         return new String(chars);
     }
 
+    /**
+     * Вставляет студентов в базу данных.
+     */
     private List<Map<String, String>> generateStudents(Connection conn, String groupName, int count) throws SQLException {
         List<Map<String, String>> students = new ArrayList<>();
         int nextId = getNextUserId(conn);
@@ -203,6 +211,9 @@ public class TeacherStudentServlet extends HttpServlet {
         return students;
     }
 
+    /**
+     * Получает следующий доступный ID пользователя.
+     */
     private int getNextUserId(Connection conn) throws SQLException {
         String sql = "SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM users";
         try (Statement stmt = conn.createStatement();
@@ -214,10 +225,9 @@ public class TeacherStudentServlet extends HttpServlet {
         return 1;
     }
 
-    // ============================================
-    // УПРАВЛЕНИЕ СТУДЕНТАМИ
-    // ============================================
-
+    /**
+     * Возвращает список студентов с возможностью фильтрации.
+     */
     private void handleListStudents(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String search = req.getParameter("search");
         String group = req.getParameter("group");
@@ -284,6 +294,9 @@ public class TeacherStudentServlet extends HttpServlet {
         resp.getWriter().write(gson.toJson(response));
     }
 
+    /**
+     * Обновляет информацию о студенте.
+     */
     private void handleUpdateStudent(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String body = req.getReader().lines().reduce("", (a, b) -> a + b);
         Map<String, Object> data = gson.fromJson(body, Map.class);
@@ -311,6 +324,9 @@ public class TeacherStudentServlet extends HttpServlet {
         }
     }
 
+    /**
+     * Удаляет студента и все связанные с ним refresh токены.
+     */
     private void handleDeleteStudent(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         int id = Integer.parseInt(req.getParameter("id"));
 

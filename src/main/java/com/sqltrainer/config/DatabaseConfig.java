@@ -11,6 +11,12 @@ import java.sql.Statement;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Конфигурация подключений к базе данных.
+ * Использует HikariCP для пулинга соединений.
+ * Поддерживает три роли: ADMIN, TEACHER, STUDENT.
+ * Для каждой учебной базы создаётся отдельный пул соединений.
+ */
 public class DatabaseConfig {
     private static final Logger log = LoggerFactory.getLogger(DatabaseConfig.class);
 
@@ -18,6 +24,7 @@ public class DatabaseConfig {
     private static final Map<String, HikariDataSource> studentDataSources = new ConcurrentHashMap<>();
     private static final Map<String, HikariDataSource> teacherDataSources = new ConcurrentHashMap<>();
 
+    // Параметры подключения из переменных окружения
     private static final String DB_HOST = System.getenv().getOrDefault("DB_HOST", "localhost");
     private static final String DB_PORT = System.getenv().getOrDefault("DB_PORT", "5432");
     private static final String ADMIN_USER = System.getenv().getOrDefault("DB_ADMIN_USER", "postgres");
@@ -27,6 +34,7 @@ public class DatabaseConfig {
     private static final String STUDENT_USER = System.getenv().getOrDefault("DB_STUDENT_USER", "students");
     private static final String STUDENT_PASSWORD = System.getenv().getOrDefault("DB_STUDENT_PASSWORD", "student_pass");
 
+    // Ограничения для безопасности
     private static final int QUERY_TIMEOUT_SEC = Integer.parseInt(System.getenv().getOrDefault("QUERY_TIMEOUT_SEC", "3"));
     private static final int MAX_ROWS = Integer.parseInt(System.getenv().getOrDefault("MAX_ROWS", "1000"));
     private static final int CONNECTION_TIMEOUT_MS = Integer.parseInt(System.getenv().getOrDefault("CONNECTION_TIMEOUT_MS", "5000"));
@@ -58,10 +66,20 @@ public class DatabaseConfig {
         log.info("DatabaseConfig initialized with PostgreSQL at {}:{}", DB_HOST, DB_PORT);
     }
 
+    /**
+     * Роли пользователей для разграничения доступа к БД.
+     */
     public enum Role {
-        ADMIN, TEACHER, STUDENT
+        ADMIN,   // Полный доступ, только для служебных операций
+        TEACHER, // Создание и управление учебными базами
+        STUDENT  // Только чтение SELECT
     }
 
+    /**
+     * Возвращает соединение с БД в зависимости от роли и имени базы.
+     * @param role роль пользователя
+     * @param dbName имя базы данных (обязательно для STUDENT и TEACHER)
+     */
     public static Connection getConnection(Role role, String dbName) throws SQLException {
         if (role == Role.STUDENT && (dbName == null || dbName.isEmpty())) {
             throw new SQLException("Database name is required for STUDENT connection");
@@ -81,6 +99,10 @@ public class DatabaseConfig {
         }
     }
 
+    /**
+     * Создаёт или возвращает существующий пул соединений для преподавателя.
+     * Пул создаётся для каждой базы данных отдельно.
+     */
     private static HikariDataSource getTeacherDataSource(String dbName) {
         return teacherDataSources.computeIfAbsent(dbName, name -> {
             HikariConfig config = new HikariConfig();
@@ -103,6 +125,10 @@ public class DatabaseConfig {
         });
     }
 
+    /**
+     * Создаёт или возвращает существующий пул соединений для студентов.
+     * Соединения открываются в режиме только для чтения.
+     */
     private static HikariDataSource getStudentDataSource(String dbName) {
         return studentDataSources.computeIfAbsent(dbName, name -> {
             HikariConfig config = new HikariConfig();
@@ -128,6 +154,10 @@ public class DatabaseConfig {
         });
     }
 
+    /**
+     * Устанавливает ограничения для сессии студента на уровне PostgreSQL.
+     * Ограничивает время выполнения запроса, память и кодировку.
+     */
     private static void applyStudentLimits(Connection conn) {
         try (Statement stmt = conn.createStatement()) {
             stmt.execute(String.format("SET statement_timeout = '%ds'", QUERY_TIMEOUT_SEC));
@@ -140,6 +170,10 @@ public class DatabaseConfig {
         }
     }
 
+    /**
+     * Закрывает пул соединений студентов для указанной базы.
+     * Вызывается при удалении базы данных.
+     */
     public static void closeStudentPool(String dbName) {
         HikariDataSource ds = studentDataSources.remove(dbName);
         if (ds != null && !ds.isClosed()) {
@@ -148,6 +182,10 @@ public class DatabaseConfig {
         }
     }
 
+    /**
+     * Закрывает пул соединений преподавателя для указанной базы.
+     * Вызывается при удалении базы данных.
+     */
     public static void closeTeacherPool(String dbName) {
         HikariDataSource ds = teacherDataSources.remove(dbName);
         if (ds != null && !ds.isClosed()) {
@@ -156,6 +194,9 @@ public class DatabaseConfig {
         }
     }
 
+    /**
+     * Закрывает все пулы соединений при остановке приложения.
+     */
     public static void closeAllPools() {
         if (adminDataSource != null && !adminDataSource.isClosed()) {
             adminDataSource.close();

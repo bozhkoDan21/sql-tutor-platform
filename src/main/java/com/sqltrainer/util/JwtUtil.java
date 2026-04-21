@@ -20,7 +20,7 @@ import java.util.Date;
 public class JwtUtil {
     private static final Logger log = LoggerFactory.getLogger(JwtUtil.class);
 
-    // ИСПРАВЛЕНО: без дефолтного значения, только из переменных окружения
+    // Секретный ключ берётся только из переменных окружения
     private static final String SECRET;
     private static final SecretKey KEY;
 

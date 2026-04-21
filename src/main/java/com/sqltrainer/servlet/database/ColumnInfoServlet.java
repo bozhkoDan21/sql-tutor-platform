@@ -2,6 +2,7 @@ package com.sqltrainer.servlet.database;
 
 import com.sqltrainer.config.DatabaseConfig;
 import com.google.gson.Gson;
+import com.sqltrainer.util.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,13 +18,17 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.regex.Pattern;
 
+/**
+ * Сервлет для получения списка колонок таблицы.
+ * Используется для автодополнения в редакторе SQL.
+ */
 @WebServlet("/api/columns")
 public class ColumnInfoServlet extends HttpServlet {
 
     private static final Logger log = LoggerFactory.getLogger(ColumnInfoServlet.class);
     private final Gson gson = new Gson();
 
-    // Только буквы, цифры и подчёркивания, начинается с буквы или подчёркивания
+    // Регулярное выражение для валидации идентификаторов SQL
     private static final Pattern VALID_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     @Override
@@ -39,7 +44,7 @@ public class ColumnInfoServlet extends HttpServlet {
             return;
         }
 
-        // ВАЛИДАЦИЯ: защита от SQL-инъекций
+        // Валидация для защиты от SQL-инъекций
         if (!isValidIdentifier(dbName)) {
             log.warn("Invalid database name: {}", dbName);
             resp.getWriter().write("{\"error\":\"Invalid database name\"}");
@@ -57,7 +62,6 @@ public class ColumnInfoServlet extends HttpServlet {
 
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.STUDENT, dbName)) {
             DatabaseMetaData meta = conn.getMetaData();
-            // tableName уже валидирован, но для безопасности используем экранирование
             try (ResultSet rs = meta.getColumns(null, "public", tableName, "%")) {
                 while (rs.next()) {
                     columns.add(rs.getString("COLUMN_NAME"));
@@ -76,21 +80,22 @@ public class ColumnInfoServlet extends HttpServlet {
     }
 
     /**
-     * Валидация идентификатора БД/таблицы/колонки
-     * Только буквы, цифры, подчёркивания, начинается с буквы или подчёркивания
+     * Валидация идентификатора базы данных, таблицы или колонки.
+     * Разрешены только буквы, цифры и подчёркивания.
+     * Имя должно начинаться с буквы или подчёркивания.
+     * Дополнительно проверяется отсутствие зарезервированных SQL-команд.
      */
     private boolean isValidIdentifier(String identifier) {
         if (identifier == null || identifier.isEmpty()) {
             return false;
         }
-        // Дополнительная защита от зарезервированных слов и слишком длинных имён
+        // Максимальная длина идентификатора в PostgreSQL
         if (identifier.length() > 63) {
             return false;
         }
         String upper = identifier.toUpperCase();
         // Защита от SQL-команд в имени
-        String[] reserved = {"SELECT", "INSERT", "UPDATE", "DELETE", "DROP", "CREATE",
-                "ALTER", "TRUNCATE", "GRANT", "REVOKE", "UNION", "WHERE"};
+        String[] reserved = Constants.RESERVED_SQL_WORDS;
         for (String word : reserved) {
             if (upper.contains(word)) {
                 return false;

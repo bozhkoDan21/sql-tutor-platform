@@ -6,6 +6,11 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
+/**
+ * Сервлет для разрешения путей к JSP страницам.
+ * Позволяет использовать чистые URL без расширения .jsp.
+ * Страницы физически расположены в папке /pages.
+ */
 @WebServlet({"/login", "/index", "/profile", "/teacher", "/manageStudents"})
 public class ViewResolverServlet extends HttpServlet {
 
@@ -14,6 +19,7 @@ public class ViewResolverServlet extends HttpServlet {
         String path = req.getServletPath();
         String jspPage;
 
+        // Маппинг URL -> JSP файл в папке pages
         switch (path) {
             case "/login":
                 jspPage = "/pages/login.jsp";

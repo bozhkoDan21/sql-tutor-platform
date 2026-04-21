@@ -28,19 +28,19 @@ import java.util.concurrent.Semaphore;
 public class QueryExecutor {
     private static final Logger log = LoggerFactory.getLogger(QueryExecutor.class);
 
-    /** Кеш результатов (TTL 30 секунд) */
+    // Кеш результатов с TTL 30 секунд
     private static final Map<String, QueryResult> cache = new ConcurrentHashMap<>();
     private static final long CACHE_TTL_MS = 30_000;
 
-    /** Планировщик для периодической очистки кеша */
+    // Планировщик для периодической очистки кеша
     private static final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
-    /** Семафор для ограничения параллельных запросов */
+    // Семафор для ограничения параллельных запросов
     private static final int MAX_CONCURRENT_QUERIES = Integer.parseInt(
             System.getenv().getOrDefault("MAX_CONCURRENT_QUERIES", "10"));
     private static final Semaphore querySemaphore = new Semaphore(MAX_CONCURRENT_QUERIES);
 
-    /** Таймаут ожидания в очереди (30 секунд) */
+    // Таймаут ожидания в очереди (30 секунд)
     private static final int SEMAPHORE_TIMEOUT_SEC = Integer.parseInt(
             System.getenv().getOrDefault("SEMAPHORE_TIMEOUT_SEC", "30"));
 
@@ -72,11 +72,14 @@ public class QueryExecutor {
         log.info("QueryExecutor initialized with max concurrent queries: {}", MAX_CONCURRENT_QUERIES);
     }
 
+    /**
+     * Результат выполнения запроса.
+     */
     public static class QueryResult {
         private List<String> columns = new ArrayList<>();
         private List<Map<String, Object>> rows = new ArrayList<>();
-        private String explainJson;      // JSON для визуализации деревом
-        private String explainText;      // TEXT для оригинального вывода PostgreSQL
+        private String explainJson;
+        private String explainText;
         private long executionTimeMs;
         private String error;
         private boolean success;
@@ -127,7 +130,6 @@ public class QueryExecutor {
      * @return результат выполнения
      */
     public static QueryResult executeAsStudent(String dbName, String sql, boolean needExplain) {
-        // Пытаемся получить разрешение от семафора
         boolean acquired = false;
         try {
             acquired = querySemaphore.tryAcquire(SEMAPHORE_TIMEOUT_SEC, TimeUnit.SECONDS);
@@ -139,7 +141,6 @@ public class QueryExecutor {
                         "Активных запросов: " + activeQueries);
             }
 
-            // Выполняем сам запрос
             return executeAsStudentInternal(dbName, sql, needExplain);
 
         } catch (InterruptedException e) {
@@ -156,17 +157,14 @@ public class QueryExecutor {
      * Внутренний метод выполнения запроса (без семафора)
      */
     private static QueryResult executeAsStudentInternal(String dbName, String sql, boolean needExplain) {
-        // Валидация
         if (sql == null || sql.trim().isEmpty()) {
             return errorResult("Query is empty");
         }
 
         String sqlTrimmed = sql.trim();
-
-        // Разбиваем запрос на отдельные statements
         String[] statements = sqlTrimmed.split(";");
 
-        // Ищем последний SELECT запрос (игнорируем пустые и не-SELECT)
+        // Ищем последний SELECT запрос
         String lastSelect = null;
         for (String stmt : statements) {
             String trimmed = stmt.trim();
@@ -179,13 +177,11 @@ public class QueryExecutor {
             return errorResult("No SELECT query found. Only SELECT queries are allowed.");
         }
 
-        // Если был только один запрос или несколько, но последний SELECT
         if (statements.length > 1 && log.isDebugEnabled()) {
             log.debug("Multiple statements detected, executing only the last SELECT: {}",
                     lastSelect.length() > 100 ? lastSelect.substring(0, 100) + "..." : lastSelect);
         }
 
-        // Выполняем последний SELECT запрос
         return executeSingleQuery(dbName, lastSelect, needExplain);
     }
 
@@ -195,13 +191,12 @@ public class QueryExecutor {
     private static QueryResult executeSingleQuery(String dbName, String sql, boolean needExplain) {
         String sqlLower = sql.toLowerCase();
 
-        // Защита от опасных конструкций
         if (containsDangerousPatterns(sqlLower)) {
             log.warn("Blocked potentially dangerous query: {}", sql);
             return errorResult("Query contains prohibited patterns (DELETE, UPDATE, DROP, etc.)");
         }
 
-        // Проверяем кеш
+        // Проверка кеша
         String cacheKey = dbName + ":" + sql + ":explain=" + needExplain;
         QueryResult cached = cache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.getExecutionTimeMs()) < CACHE_TTL_MS) {
@@ -215,11 +210,9 @@ public class QueryExecutor {
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.STUDENT, dbName);
              Statement stmt = conn.createStatement()) {
 
-            // Лимиты через JDBC
             stmt.setQueryTimeout(DatabaseConfig.getQueryTimeout());
             stmt.setMaxRows(DatabaseConfig.getMaxRows());
 
-            // Получаем план выполнения ТОЛЬКО если needExplain = true
             if (needExplain) {
                 ExplainResult explainResult = getExplainPlan(stmt, sql);
                 result.setExplainJson(explainResult.json);
@@ -229,7 +222,6 @@ public class QueryExecutor {
                 result.setExplainText(null);
             }
 
-            // Получаем данные
             try (ResultSet rs = stmt.executeQuery(sql)) {
                 ResultSetMetaData meta = rs.getMetaData();
                 int columnCount = meta.getColumnCount();
@@ -255,7 +247,6 @@ public class QueryExecutor {
             long executionTime = System.currentTimeMillis() - startTime;
             result.setExecutionTimeMs(executionTime);
 
-            // Кешируем результат
             cache.put(cacheKey, result);
 
             if (log.isDebugEnabled()) {
@@ -295,7 +286,6 @@ public class QueryExecutor {
         String jsonPlan = null;
         String textPlan = null;
 
-        // Получаем JSON план (для визуализации деревом)
         try {
             try (ResultSet rs = stmt.executeQuery(explainSqlJson)) {
                 if (rs.next()) {
@@ -308,7 +298,6 @@ public class QueryExecutor {
             }
         }
 
-        // Получаем TEXT план (оригинальный вывод PostgreSQL)
         try (ResultSet rs = stmt.executeQuery(explainSqlText)) {
             StringBuilder plan = new StringBuilder();
             while (rs.next()) {
@@ -317,7 +306,6 @@ public class QueryExecutor {
             textPlan = plan.toString();
         }
 
-        // Если JSON не получили, но TEXT есть - используем TEXT для обоих полей
         if (jsonPlan == null || !jsonPlan.trim().startsWith("[")) {
             jsonPlan = textPlan;
         }
@@ -326,13 +314,10 @@ public class QueryExecutor {
     }
 
     /**
-     * Проверка на опасные паттерны
+     * Проверка на опасные паттерны (защита от DROP, DELETE, UPDATE и т.д.)
      */
     private static boolean containsDangerousPatterns(String sqlLower) {
-        String[] dangerous = {
-                "delete", "update", "insert", "drop", "truncate", "alter",
-                "create", "grant", "revoke", "pg_sleep", "benchmark"
-        };
+        String[] dangerous = Constants.DANGEROUS_SQL_PATTERNS;
 
         for (String pattern : dangerous) {
             if (sqlLower.contains(pattern)) {
@@ -343,7 +328,7 @@ public class QueryExecutor {
     }
 
     /**
-     * Обработка SQL исключений с понятными сообщениями
+     * Обработка SQL исключений с понятными сообщениями для пользователя
      */
     private static String handleSQLError(SQLException e) {
         String msg = e.getMessage().toLowerCase();

@@ -16,6 +16,10 @@ import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Сервлет для аутентификации и управления пользователями.
+ * Обрабатывает логин, логаут, обновление токенов и получение информации о пользователе.
+ */
 @WebServlet("/api/auth/*")
 public class AuthServlet extends HttpServlet {
 
@@ -59,8 +63,9 @@ public class AuthServlet extends HttpServlet {
     }
 
     /**
-     * Единый вход для всех пользователей (и студенты, и преподаватели)
-     * Роль определяется автоматически из БД
+     * Обработка входа в систему.
+     * Проверяет логин и пароль, генерирует access и refresh токены.
+     * Роль пользователя определяется автоматически из базы данных.
      */
     private void handleLogin(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String body = req.getReader().lines().reduce("", (a, b) -> a + b);
@@ -125,7 +130,8 @@ public class AuthServlet extends HttpServlet {
     }
 
     /**
-     * Обновление access token по refresh token
+     * Обновление access токена с использованием refresh токена.
+     * Позволяет поддерживать сессию без повторного ввода пароля.
      */
     private void handleRefresh(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String body = req.getReader().lines().reduce("", (a, b) -> a + b);
@@ -146,7 +152,6 @@ public class AuthServlet extends HttpServlet {
                 if (rs.next()) {
                     Long userId = rs.getLong("user_id");
 
-                    // Получаем данные пользователя
                     String userSql = "SELECT login, role FROM users WHERE id = ?";
                     try (PreparedStatement userStmt = conn.prepareStatement(userSql)) {
                         userStmt.setLong(1, userId);
@@ -175,7 +180,8 @@ public class AuthServlet extends HttpServlet {
     }
 
     /**
-     * Выход из системы (отзыв refresh token)
+     * Выход из системы.
+     * Отзывает refresh токен, делая его недействительным.
      */
     private void handleLogout(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String authHeader = req.getHeader("Authorization");
@@ -198,7 +204,7 @@ public class AuthServlet extends HttpServlet {
     }
 
     /**
-     * Получение информации о текущем пользователе
+     * Получение информации о текущем аутентифицированном пользователе.
      */
     private void handleGetMe(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         Long userId = (Long) req.getAttribute("userId");
@@ -240,7 +246,7 @@ public class AuthServlet extends HttpServlet {
     }
 
     /**
-     * Сохраняет refresh token в БД
+     * Сохраняет refresh токен в базу данных с 7-дневным сроком действия.
      */
     private void saveRefreshToken(Connection conn, Long userId, String token) throws SQLException {
         String sql = "INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, NOW() + INTERVAL '7 days')";
@@ -252,7 +258,8 @@ public class AuthServlet extends HttpServlet {
     }
 
     /**
-     * Обновляет время последней активности пользователя
+     * Обновляет время последней активности пользователя.
+     * Используется для отслеживания сессий.
      */
     private void updateLastActivity(Connection conn, Long userId) throws SQLException {
         String sql = "UPDATE users SET last_activity_at = CURRENT_TIMESTAMP WHERE id = ?";
@@ -262,6 +269,9 @@ public class AuthServlet extends HttpServlet {
         }
     }
 
+    /**
+     * Отправляет JSON-ответ с ошибкой.
+     */
     private void sendError(HttpServletResponse resp, int status, String message) throws IOException {
         resp.setStatus(status);
         resp.getWriter().write("{\"error\":\"" + message + "\"}");

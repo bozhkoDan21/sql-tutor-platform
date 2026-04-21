@@ -3,6 +3,7 @@ package com.sqltrainer.servlet.teacher;
 import com.sqltrainer.config.DatabaseConfig;
 import com.sqltrainer.servlet.log.LogStreamServlet;
 import com.sqltrainer.servlet.student.StudentServlet;
+import com.sqltrainer.util.Constants;
 import com.sqltrainer.util.QueryExecutor;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
@@ -22,27 +23,27 @@ import java.sql.*;
 import java.util.*;
 import java.util.regex.Pattern;
 
+/**
+ * Сервлет для управления учебными базами данных преподавателем.
+ * Позволяет создавать новые БД из SQL-скриптов, удалять существующие,
+ * просматривать активные сессии студентов.
+ */
 @WebServlet("/api/teacher")
 @MultipartConfig(
-        maxFileSize = 1024 * 1024 * 10,      // 10 MB
-        maxRequestSize = 1024 * 1024 * 15    // 15 MB
+        maxFileSize = Constants.MAX_FILE_SIZE_BYTES,
+        maxRequestSize = Constants.MAX_REQUEST_SIZE_BYTES
 )
 public class TeacherServlet extends HttpServlet {
 
     private static final Logger log = LoggerFactory.getLogger(TeacherServlet.class);
     private final Gson gson = new Gson();
 
-    private static final Set<String> ALLOWED_EXTENSIONS = Collections.singleton("sql");
-    private static final int MAX_SCRIPT_LENGTH = 2_000_000; // Уменьшено до 2MB
+    private static final Set<String> ALLOWED_EXTENSIONS = new HashSet<>(Arrays.asList(Constants.ALLOWED_SQL_EXTENSIONS));
     private static final Pattern DB_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
-    // Защищённые учебные базы данных
+    // Защищённые базы данных, которые нельзя удалить
     private static final Set<String> PROTECTED_DATABASES = new HashSet<>(Arrays.asList(
-            "sql_tutor_university_db",
-            "archaeology_10m",
-            "postgres",
-            "template0",
-            "template1"
+            Constants.PROTECTED_DATABASES
     ));
 
     @Override
@@ -88,7 +89,8 @@ public class TeacherServlet extends HttpServlet {
     }
 
     /**
-     * Безопасное экранирование имени базы данных с использованием quote_ident
+     * Экранирует идентификатор для безопасного использования в SQL.
+     * Использует встроенную функцию PostgreSQL quote_ident.
      */
     private String quoteIdent(Connection conn, String identifier) throws SQLException {
         try (PreparedStatement stmt = conn.prepareStatement("SELECT quote_ident(?)")) {
@@ -102,16 +104,17 @@ public class TeacherServlet extends HttpServlet {
         return identifier;
     }
 
+    /**
+     * Обрабатывает загрузку SQL-скрипта и создание новой базы данных.
+     */
     private void handleUpload(Connection conn, String dbName, Part filePart,
                               Map<String, Object> response) throws IOException, SQLException {
 
-        // Проверка имени базы данных
         if (dbName == null || dbName.isEmpty()) {
             response.put("error", "Database name is required");
             return;
         }
 
-        // Запрет на создание защищённых баз
         if (PROTECTED_DATABASES.contains(dbName.toLowerCase())) {
             response.put("error", "Cannot create database with reserved name: " + dbName);
             return;
@@ -121,7 +124,7 @@ public class TeacherServlet extends HttpServlet {
             response.put("error", "Database name can only contain letters, numbers and underscores");
             return;
         }
-        if (dbName.length() > 63) {
+        if (dbName.length() > Constants.MAX_DB_NAME_LENGTH) {
             response.put("error", "Database name too long (max 63 characters)");
             return;
         }
@@ -138,7 +141,7 @@ public class TeacherServlet extends HttpServlet {
         }
 
         String script = readSqlScript(filePart);
-        if (script.length() > MAX_SCRIPT_LENGTH) {
+        if (script.length() > Constants.MAX_SCRIPT_SIZE_BYTES) {
             response.put("error", "SQL script too large (max 2MB)");
             return;
         }
@@ -152,14 +155,11 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
-        // ОЧИЩАЕМ КЕШ ПЕРЕД СОЗДАНИЕМ НОВОЙ БД
         QueryExecutor.clearCache();
         log.info("Cache cleared before creating database: {}", dbName);
 
-        // Экранируем имя базы данных
         String quotedDbName = quoteIdent(conn, dbName);
 
-        // Создание базы данных (безопасно через quote_ident)
         try (Statement stmt = conn.createStatement()) {
             String createSql = "CREATE DATABASE " + quotedDbName + " OWNER teacher_role";
             log.debug("Executing: {}", createSql);
@@ -170,7 +170,6 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
-        // ИСПРАВЛЕНО: используем проверенное dbName, а не originalDbName
         try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, dbName);
              Statement stmt = dbConn.createStatement()) {
 
@@ -205,15 +204,14 @@ public class TeacherServlet extends HttpServlet {
         return ALLOWED_EXTENSIONS.contains(ext);
     }
 
+    /**
+     * Проверяет содержимое SQL-скрипта на наличие опасных команд.
+     */
     private boolean isValidSqlContent(String content) {
         if (content == null || content.trim().isEmpty()) return false;
         String lower = content.toLowerCase();
 
-        List<String> dangerous = Arrays.asList(
-                "drop database", "drop table", "delete from", "truncate",
-                "alter system", "pg_sleep", "copy"
-        );
-        for (String cmd : dangerous) {
+        for (String cmd : Constants.DANGEROUS_SCRIPT_PATTERNS) {
             if (lower.contains(cmd)) return false;
         }
 
@@ -243,6 +241,9 @@ public class TeacherServlet extends HttpServlet {
         }
     }
 
+    /**
+     * Предоставляет доступ студентам к созданной базе данных.
+     */
     private void grantStudentAccess(Connection conn, String quotedDbName, String dbName) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
             String grantConnectSql = "GRANT CONNECT ON DATABASE " + quotedDbName + " TO students";
@@ -250,7 +251,6 @@ public class TeacherServlet extends HttpServlet {
             stmt.executeUpdate(grantConnectSql);
         }
 
-        // ИСПРАВЛЕНО: используем проверенное dbName
         try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, dbName);
              Statement stmt = dbConn.createStatement()) {
             stmt.executeUpdate("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO students");
@@ -269,6 +269,9 @@ public class TeacherServlet extends HttpServlet {
         return script.toString();
     }
 
+    /**
+     * Выполняет SQL-скрипт и отправляет прогресс через SSE логи.
+     */
     private void executeSqlScriptWithLogs(Statement stmt, String script) throws SQLException {
         String[] lines = script.split("\n");
         StringBuilder currentQuery = new StringBuilder();
@@ -366,13 +369,15 @@ public class TeacherServlet extends HttpServlet {
         return null;
     }
 
+    /**
+     * Удаляет базу данных. Защищённые базы удалить нельзя.
+     */
     private void handleDelete(Connection conn, String dbName, Map<String, Object> response) {
         if (dbName == null || dbName.isEmpty()) {
             response.put("error", "Database name is required");
             return;
         }
 
-        // ИСПРАВЛЕНО: защита системных и учебных баз данных
         if (PROTECTED_DATABASES.contains(dbName.toLowerCase())) {
             response.put("error", "Cannot delete protected database: " + dbName +
                     ". This is a system or demo database required for learning.");
@@ -385,15 +390,12 @@ public class TeacherServlet extends HttpServlet {
         }
 
         try {
-            // ОЧИЩАЕМ КЕШ ПЕРЕД УДАЛЕНИЕМ БД
             QueryExecutor.clearCache();
             log.info("Cache cleared before deleting database: {}", dbName);
 
-            // Экранируем имя базы данных
             String quotedDbName = quoteIdent(conn, dbName);
 
             try (Statement stmt = conn.createStatement()) {
-                // Завершаем соединения с экранированием имени
                 try {
                     String terminateSql = String.format(
                             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity " +
@@ -406,12 +408,10 @@ public class TeacherServlet extends HttpServlet {
                     log.debug("No active connections to terminate for {}", dbName);
                 }
 
-                // Удаляем базу с экранированным именем
                 String dropSql = "DROP DATABASE IF EXISTS " + quotedDbName;
                 log.debug("Executing: {}", dropSql);
                 stmt.executeUpdate(dropSql);
 
-                // Закрываем пулы соединений для удалённой базы
                 DatabaseConfig.closeStudentPool(dbName);
                 DatabaseConfig.closeTeacherPool(dbName);
 
