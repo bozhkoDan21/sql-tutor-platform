@@ -1,4 +1,4 @@
-package com.sqltrainer.servlet;
+package com.sqltrainer.servlet.auth;
 
 import com.sqltrainer.config.DatabaseConfig;
 import com.sqltrainer.util.JwtUtil;

@@ -9,7 +9,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>SQL Trainer - Панель преподавателя</title>
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="/css/style.css?v=2">
     <style>
         .loading-overlay {
             position: fixed;
@@ -204,10 +204,10 @@
                 <span class="badge">Панель преподавателя</span>
             </div>
             <div class="nav-right">
-                <a href="index.jsp" class="nav-link">Тренажёр</a>
-                <a href="teacher.jsp" class="nav-link active">Панель преподавателя</a>
-                <a href="manageStudents.jsp" class="nav-link">Студенты</a>
-                <a href="profile.jsp" class="nav-link">Профиль</a>
+                <a href="index" class="nav-link">Тренажёр</a>
+                <a href="teacher" class="nav-link active">Панель преподавателя</a>
+                <a href="manageStudents" class="nav-link">Студенты</a>
+                <a href="profile" class="nav-link">Профиль</a>
                 <a href="#" id="logoutBtn" class="nav-link" style="background: rgba(255,255,255,0.2);">Выйти</a>
             </div>
         </div>
@@ -319,7 +319,7 @@
             const token = getAccessToken();
             const userData = getUser();
             if (!token || !userData || userData.role !== 'teacher') {
-                window.location.href = '/login.jsp';
+                window.location.href = '/login';
             }
         })();
 
@@ -337,7 +337,7 @@
                     });
                 }
                 localStorage.clear();
-                window.location.href = '/login.jsp';
+                window.location.href = '/login';
             });
         }
 
@@ -386,7 +386,7 @@
                 .then(function(response) {
                     if (response.status === 401) {
                         localStorage.clear();
-                        window.location.href = '/login.jsp';
+                        window.location.href = '/login';
                         throw new Error('Unauthorized');
                     }
                     return response.json();
@@ -452,7 +452,7 @@
                 .then(function(response) {
                     if (response.status === 401) {
                         localStorage.clear();
-                        window.location.href = '/login.jsp';
+                        window.location.href = '/login';
                         throw new Error('Unauthorized');
                     }
                     return response.json();

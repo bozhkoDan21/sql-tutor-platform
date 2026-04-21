@@ -13,11 +13,11 @@ echo "========================================"
 echo ""
 
 # Переходим в корень проекта
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 # Проверка, что мы в правильной директории
 if [ ! -f pom.xml ]; then
-    echo -e "${RED}[ERROR] Не найден pom.xml. Убедитесь, что скрипт находится в папке scripts${NC}"
+    echo -e "${RED}[ERROR] Не найден pom.xml. Убедитесь, что скрипт находится в папке scripts/deploy${NC}"
     exit 1
 fi
 
@@ -130,7 +130,7 @@ fi
 
 # Выполнение скрипта авторизации
 echo "[5/5] Настройка таблиц авторизации..."
-docker exec -i sql_trainer_postgres psql -U postgres < ../scripts/setup_auth.sql 2>/dev/null
+docker exec -i sql_trainer_postgres psql -U postgres < ../scripts/db/setup_auth.sql 2>/dev/null
 if [ $? -ne 0 ]; then
     echo -e "${YELLOW}[WARN] Не удалось выполнить setup_auth.sql${NC}"
 else
@@ -143,7 +143,7 @@ if [ "$REMOVE_DATA" = true ]; then
     echo -e "${YELLOW}[INFO] Запуск генерации учебных баз данных (может занять 30-40 минут)...${NC}"
     echo -e "${YELLOW}[INFO] Следите за логами PostgreSQL: docker logs -f sql_trainer_postgres${NC}"
     echo ""
-    docker exec -i sql_trainer_postgres psql -U postgres < ../scripts/setup_database.sql 2>/dev/null
+    docker exec -i sql_trainer_postgres psql -U postgres < ../scripts/db/setup_database.sql 2>/dev/null
     if [ $? -ne 0 ]; then
         echo -e "${YELLOW}[WARN] Не удалось выполнить setup_database.sql${NC}"
     else

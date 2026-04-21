@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourcePerFileMappings">
-    <file url="file://$PROJECT_DIR$/scripts/setup_auth.sql" value="f8a12852-94a7-40d2-b458-2f764d87c7cc" />
-    <file url="file://$PROJECT_DIR$/scripts/setup_database.sql" value="f8a12852-94a7-40d2-b458-2f764d87c7cc" />
+    <file url="file://$PROJECT_DIR$/scripts/db/setup_auth.sql" value="f8a12852-94a7-40d2-b458-2f764d87c7cc" />
+    <file url="file://$PROJECT_DIR$/scripts/db/setup_database.sql" value="f8a12852-94a7-40d2-b458-2f764d87c7cc" />
   </component>
 </project>

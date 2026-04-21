@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>SQL Trainer - Вход</title>
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="/css/style.css?v=2">
     <style>
         .login-container {
             min-height: 100vh;
@@ -155,9 +155,9 @@
                     console.log('User role:', data.user.role);
 
                     if (data.user.role === 'teacher') {
-                        window.location.href = '/teacher.jsp';
+                        window.location.href = '/teacher';
                     } else {
-                        window.location.href = '/index.jsp';
+                        window.location.href = '/index';
                     }
                 } else {
                     errorDiv.textContent = data.error || 'Ошибка входа. Проверьте логин и пароль.';
@@ -177,9 +177,9 @@
             try {
                 const userData = JSON.parse(user);
                 if (userData.role === 'teacher') {
-                    window.location.href = '/teacher.jsp';
+                    window.location.href = '/teacher';
                 } else {
-                    window.location.href = '/index.jsp';
+                    window.location.href = '/index';
                 }
             } catch(e) {}
         }

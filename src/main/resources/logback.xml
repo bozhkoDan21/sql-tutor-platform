@@ -22,14 +22,14 @@
 
     <!-- Настройка уровней для разных пакетов -->
     <!-- Частые операции логируем только на WARN/ERROR в production -->
-    <logger name="com.sqltrainer.servlet.StudentServlet" level="${LOG_LEVEL:-INFO}"/>
+    <logger name="com.sqltrainer.servlet.student.StudentServlet" level="${LOG_LEVEL:-INFO}"/>
     <logger name="com.sqltrainer.util.QueryExecutor" level="${LOG_LEVEL:-INFO}"/>
 
     <!-- Фильтры и авторизацию логируем на WARN (проблемы) -->
     <logger name="com.sqltrainer.filter" level="WARN"/>
 
     <!-- Аутентификацию логируем на INFO (важные события) -->
-    <logger name="com.sqltrainer.servlet.AuthServlet" level="INFO"/>
+    <logger name="com.sqltrainer.servlet.auth.AuthServlet" level="INFO"/>
 
     <!-- Конфигурацию и инициализацию логируем на INFO -->
     <logger name="com.sqltrainer.config" level="INFO"/>

@@ -1,4 +1,4 @@
-package com.sqltrainer.servlet;
+package com.sqltrainer.servlet.staticres;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -7,7 +7,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 
-@WebServlet({ "*.css", "*.js" })  // ← Обрабатываем и CSS, и JS
+@WebServlet({ "*.css", "*.js" })
 public class StaticResourceServlet extends HttpServlet {
 
     @Override
@@ -26,8 +26,20 @@ public class StaticResourceServlet extends HttpServlet {
         }
         resp.setCharacterEncoding("UTF-8");
 
-        // Пробуем найти файл
-        InputStream is = getServletContext().getResourceAsStream(path);
+        // Пробуем найти файл в разных местах
+        InputStream is = null;
+
+        // Сначала ищем в корне
+        is = getServletContext().getResourceAsStream(path);
+
+        // Если не нашли, ищем в папке css или js
+        if (is == null && path.endsWith(".css")) {
+            is = getServletContext().getResourceAsStream("/css" + path);
+        }
+
+        if (is == null && path.endsWith(".js")) {
+            is = getServletContext().getResourceAsStream("/js" + path);
+        }
 
         if (is == null) {
             resp.sendError(404, "File not found: " + path);

@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>SQL Trainer - Личный профиль</title>
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="/css/style.css?v=2">
     <style>
         .profile-container {
             max-width: 800px;
@@ -72,9 +72,9 @@
                 <span class="badge">Личный профиль</span>
             </div>
             <div class="nav-right">
-                <a href="index.jsp" class="nav-link">Тренажёр</a>
-                <a href="teacher.jsp" id="teacherLink" class="nav-link" style="display: none;">Панель преподавателя</a>
-                <a href="profile.jsp" class="nav-link active">Профиль</a>
+                <a href="index" class="nav-link">Тренажёр</a>
+                <a href="teacher" id="teacherLink" class="nav-link" style="display: none;">Панель преподавателя</a>
+                <a href="profile" class="nav-link active">Профиль</a>
                 <a href="#" id="logoutBtn" class="nav-link" style="background: rgba(255,255,255,0.2);">Выйти</a>
             </div>
         </div>
@@ -177,7 +177,7 @@
             const token = getAccessToken();
             const user = localStorage.getItem('user');
             if (!token || !user) {
-                window.location.href = '/login.jsp';
+                window.location.href = '/login';
                 return;
             }
             currentUser = JSON.parse(user);
@@ -335,7 +335,7 @@
                 } catch(e) {}
             }
             localStorage.clear();
-            window.location.href = '/login.jsp';
+            window.location.href = '/login';
         });
 
         loadProfile();

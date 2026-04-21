@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>SQL Trainer - Управление студентами</title>
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="/css/style.css?v=2">
     <style>
         .search-section {
             display: flex;
@@ -182,10 +182,10 @@
                 <span class="badge">Управление студентами</span>
             </div>
             <div class="nav-right">
-                <a href="index.jsp" class="nav-link">Тренажёр</a>
-                <a href="teacher.jsp" class="nav-link">Панель преподавателя</a>
-                <a href="manageStudents.jsp" class="nav-link active">Студенты</a>
-                <a href="profile.jsp" class="nav-link">Профиль</a>
+                <a href="index" class="nav-link">Тренажёр</a>
+                <a href="teacher" class="nav-link">Панель преподавателя</a>
+                <a href="manageStudents" class="nav-link active">Студенты</a>
+                <a href="profile" class="nav-link">Профиль</a>
                 <a href="#" id="logoutBtn" class="nav-link" style="background: rgba(255,255,255,0.2);">Выйти</a>
             </div>
         </div>
@@ -326,7 +326,7 @@
                 } catch (refreshError) {
                     console.error('Refresh failed:', refreshError);
                     localStorage.clear();
-                    window.location.href = '/login.jsp';
+                    window.location.href = '/login';
                     throw new Error('Session expired');
                 }
             }
@@ -343,14 +343,14 @@
             const user = localStorage.getItem('user');
 
             if (!token || !user) {
-                window.location.href = '/login.jsp';
+                window.location.href = '/login';
                 return;
             }
 
             try {
                 const userData = JSON.parse(user);
                 if (userData.role !== 'teacher') {
-                    window.location.href = '/login.jsp';
+                    window.location.href = '/login';
                     return;
                 }
 
@@ -363,12 +363,12 @@
                         await refreshAccessToken();
                     } catch (e) {
                         localStorage.clear();
-                        window.location.href = '/login.jsp';
+                        window.location.href = '/login';
                     }
                 }
             } catch(e) {
                 console.error('Auth check error:', e);
-                window.location.href = '/login.jsp';
+                window.location.href = '/login';
             }
         })();
 
@@ -682,7 +682,7 @@
                 }
             }
             localStorage.clear();
-            window.location.href = '/login.jsp';
+            window.location.href = '/login';
         });
 
         loadStudents();

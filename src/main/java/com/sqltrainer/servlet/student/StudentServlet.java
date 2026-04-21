@@ -1,4 +1,4 @@
-package com.sqltrainer.servlet;
+package com.sqltrainer.servlet.student;
 
 import com.sqltrainer.config.DatabaseConfig;
 import com.sqltrainer.util.QueryExecutor;

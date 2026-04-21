@@ -14,6 +14,6 @@ RUN echo "CREATE EXTENSION IF NOT EXISTS plpython3u;" > /docker-entrypoint-initd
 RUN echo "CREATE EXTENSION IF NOT EXISTS pgcrypto;" >> /docker-entrypoint-initdb.d/01-init-extensions.sql
 
 # Копируем основной скрипт
-COPY scripts/setup_database.sql /docker-entrypoint-initdb.d/02-setup.sql
+COPY scripts/db/setup_database.sql /docker-entrypoint-initdb.d/02-setup.sql
 
 EXPOSE 5432

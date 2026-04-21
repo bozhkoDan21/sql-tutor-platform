@@ -1,5 +1,6 @@
-package com.sqltrainer.servlet;
+package com.sqltrainer.servlet.log;
 
+import com.sqltrainer.servlet.teacher.TeacherServlet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

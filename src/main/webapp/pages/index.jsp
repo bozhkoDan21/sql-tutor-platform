@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>SQL Trainer - учебная платформа</title>
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="/css/style.css?v=2">
 
     <!-- CodeMirror CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
@@ -24,9 +24,9 @@
                 <span class="badge">Учебная песочница</span>
             </div>
             <div class="nav-right">
-                <a href="index.jsp" class="nav-link active">Тренажёр</a>
-                <a href="teacher.jsp" id="teacherLink" class="nav-link" style="display: none;">Панель преподавателя</a>
-                <a href="profile.jsp" class="nav-link">Профиль</a>
+                <a href="index" class="nav-link active">Тренажёр</a>
+                <a href="teacher" id="teacherLink" class="nav-link" style="display: none;">Панель преподавателя</a>
+                <a href="profile" class="nav-link">Профиль</a>
                 <a href="#" id="logoutBtn" class="nav-link" style="background: rgba(255,255,255,0.2);">Выйти</a>
             </div>
         </div>
@@ -144,7 +144,7 @@
                             </button>
 
                             <label class="explain-checkbox" title="Показывать план выполнения запроса">
-                                <input type="checkbox" id="showExplainCheckbox" checked>
+                                <input type="checkbox" id="showExplainCheckbox">
                                 <span class="checkbox-icon">📊</span>
                                 <span class="checkbox-text">EXPLAIN</span>
                             </label>
@@ -190,14 +190,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 
-    <script src="script.js?v=2"></script>
+    <script src="/js/script.js?v=2"></script>
 
     <script>
         // Проверка валидности токена
         async function checkToken() {
             const token = localStorage.getItem('accessToken');
             if (!token) {
-                window.location.href = '/login.jsp';
+                window.location.href = '/login';
                 return false;
             }
 
@@ -207,13 +207,13 @@
                 });
                 if (response.status === 401) {
                     localStorage.clear();
-                    window.location.href = '/login.jsp';
+                    window.location.href = '/login';
                     return false;
                 }
                 return true;
             } catch(e) {
                 localStorage.clear();
-                window.location.href = '/login.jsp';
+                window.location.href = '/login';
                 return false;
             }
         }
@@ -247,7 +247,7 @@
                 } catch(e) {}
             }
             localStorage.clear();
-            window.location.href = '/login.jsp';
+            window.location.href = '/login';
         });
 
         // Вызов проверки токена при загрузке

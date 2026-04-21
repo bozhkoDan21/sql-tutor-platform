@@ -347,7 +347,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
             .then(response => {
                 if (response.status === 401) {
-                    window.location.href = '/login.jsp';
+                    window.location.href = '/login';
                     throw new Error('Unauthorized');
                 }
                 return response.json();
@@ -451,7 +451,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => {
             if (response.status === 401) {
-                window.location.href = '/login.jsp';
+                window.location.href = '/login';
                 throw new Error('Unauthorized');
             }
             return response.json();
@@ -518,8 +518,10 @@ document.addEventListener('DOMContentLoaded', function() {
             data.columns.forEach(col => {
                 let value = row[col];
                 if (value === null) value = 'NULL';
+                else if (value === undefined) value = '—';
                 else if (typeof value === 'object') value = JSON.stringify(value);
-                else value = escapeHtml(String(value));
+                else value = String(value);
+
                 let displayValue = value.length > 100 ? value.substring(0, 100) + '...' : value;
                 tableHTML += `<td title="${escapeHtml(value)}">${escapeHtml(displayValue)}</td>`;
             });
@@ -610,7 +612,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => {
             if (response.status === 401) {
-                window.location.href = '/login.jsp';
+                window.location.href = '/login';
                 throw new Error('Unauthorized');
             }
             return response.json();

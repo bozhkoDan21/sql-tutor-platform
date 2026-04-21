@@ -527,16 +527,22 @@ body {
 
 /* Таблица результатов */
 .table-wrapper {
-    overflow-x: auto;
+    max-height: 500px;
     max-width: 100%;
+    overflow-y: auto;
+    overflow-x: auto;
     border-radius: var(--radius);
+    border: 1px solid var(--border);
+    position: relative;
+    display: block;
 }
 
+/* Фиксация заголовка таблицы */
 .results-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.85rem;
-    min-width: 500px;
+    min-width: 600px;
 }
 
 .results-table th {
@@ -560,21 +566,51 @@ body {
     color: var(--text);
     font-family: 'Courier New', monospace;
     font-size: 0.8rem;
-    max-width: 300px;
+    max-width: 250px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.results-table td:hover {
-    overflow: visible;
-    white-space: normal;
-    word-wrap: break-word;
-    background: var(--primary-light);
+/* Подсветка всей строки при наведении */
+.results-table tr:hover td {
+    background-color: var(--primary-light);
+    cursor: pointer;
 }
 
-.results-table tr:hover td {
-    background: var(--primary-light);
+/* Подсказка при наведении */
+.results-table td {
+    position: relative;
+}
+
+.results-table td:hover::after {
+    content: attr(title);
+    position: absolute;
+    left: 0;
+    top: 100%;
+    background: var(--dark);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    white-space: normal;
+    word-break: break-word;
+    max-width: 400px;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    margin-top: 4px;
+}
+
+/* Стрелка у подсказки */
+.results-table td:hover::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 100%;
+    border: 6px solid transparent;
+    border-bottom-color: var(--dark);
+    margin-top: -6px;
+    z-index: 101;
 }
 
 /* EXPLAIN секция */
@@ -1272,6 +1308,21 @@ li.CodeMirror-hint-active {
 
 .explain-checkbox input:checked ~ .checkbox-text {
     color: var(--primary);
+}
+
+.container {
+    max-width: 1280px;
+    width: 100%;
+    overflow-x: hidden;
+}
+
+.right-column {
+    overflow-x: auto;
+    min-width: 0;
+}
+
+.card {
+    overflow-x: auto;
 }
 
 /* Утилиты */

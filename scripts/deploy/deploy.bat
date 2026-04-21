@@ -8,7 +8,7 @@ echo ========================================
 echo.
 
 REM Переходим в корень проекта
-cd /d "%~dp0.."
+cd /d "%~dp0../.."
 
 REM Проверка наличия pom.xml
 if not exist pom.xml (
@@ -128,7 +128,7 @@ if /i "!REMOVE_DATA!"=="Y" (
 
 REM Выполнение скрипта авторизации
 echo [5/5] Настройка таблиц авторизации...
-docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\setup_auth.sql 2>nul
+docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_auth.sql 2>nul
 if !errorlevel! neq 0 (
     echo [WARN] Не удалось выполнить setup_auth.sql
 ) else (
@@ -141,7 +141,7 @@ if /i "!REMOVE_DATA!"=="Y" (
     echo [INFO] Запуск генерации учебных баз данных (может занять 30-40 минут)...
     echo [INFO] Следите за логами PostgreSQL: docker logs -f sql_trainer_postgres
     echo.
-    docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\setup_database.sql 2>nul
+    docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_database.sql 2>nul
     if !errorlevel! neq 0 (
         echo [WARN] Не удалось выполнить setup_database.sql
     ) else (

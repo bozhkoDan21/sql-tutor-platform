@@ -1,4 +1,4 @@
-package com.sqltrainer.servlet;
+package com.sqltrainer.servlet.database;
 
 import com.sqltrainer.config.DatabaseConfig;
 import com.google.gson.Gson;

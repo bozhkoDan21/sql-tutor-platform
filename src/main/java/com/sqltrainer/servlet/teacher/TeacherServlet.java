@@ -1,6 +1,8 @@
-package com.sqltrainer.servlet;
+package com.sqltrainer.servlet.teacher;
 
 import com.sqltrainer.config.DatabaseConfig;
+import com.sqltrainer.servlet.log.LogStreamServlet;
+import com.sqltrainer.servlet.student.StudentServlet;
 import com.sqltrainer.util.QueryExecutor;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
