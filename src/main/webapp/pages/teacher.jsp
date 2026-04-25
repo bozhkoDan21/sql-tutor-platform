@@ -11,6 +11,7 @@
     <title>SQL Trainer - Панель преподавателя</title>
     <link rel="stylesheet" href="/css/style.css?v=2">
     <style>
+        /* Стили для модального окна загрузки с прогресс-баром */
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -128,6 +129,7 @@
             animation: spin 0.8s linear infinite;
         }
 
+        /* Стили для секции генерации студентов */
         .students-section {
             display: flex;
             flex-direction: column;
@@ -179,6 +181,7 @@
     </style>
 </head>
 <body>
+    <!-- Оверлей загрузки с прогресс-баром и логами -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner">
             <div class="spinner"></div>
@@ -197,6 +200,7 @@
         </div>
     </div>
 
+    <!-- Навигационная панель -->
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-left">
@@ -213,9 +217,11 @@
         </div>
     </nav>
 
+    <!-- Основной контент -->
     <main class="container">
         <h2 class="page-title">Панель управления</h2>
 
+        <!-- Карточка загрузки новой базы данных -->
         <div class="card">
             <h3 class="card-title">📤 Загрузить новую учебную базу</h3>
             <form id="uploadForm" class="upload-form" autocomplete="off">
@@ -236,6 +242,7 @@
             </form>
         </div>
 
+        <!-- Карточка генерации студентов -->
         <div class="card">
             <h3 class="card-title">👥 Управление студентами</h3>
             <div class="students-section">
@@ -275,11 +282,13 @@
             </div>
         </div>
 
+        <!-- Карточка списка существующих баз данных -->
         <div class="card">
             <h3 class="card-title">🗄️ Существующие базы данных</h3>
             <div class="db-manager-list" id="databasesList"><div class="empty-state">Загрузка...</div></div>
         </div>
 
+        <!-- Карточка активных сессий студентов -->
         <div class="card">
             <h3 class="card-title">👀 Активные сессии студентов</h3>
             <div class="sessions-list" id="sessionsList"><div class="empty-state">Загрузка...</div></div>
@@ -287,7 +296,9 @@
     </main>
 
     <script>
-
+        /**
+         * Экранирует HTML-символы для предотвращения XSS-атак
+         */
         function escapeHtml(text) {
             if (!text) return '';
             return text.replace(/[&<>]/g, function(m) {
@@ -298,10 +309,16 @@
             });
         }
 
+        /**
+         * Возвращает access token из localStorage
+         */
         function getAccessToken() {
             return localStorage.getItem('accessToken');
         }
 
+        /**
+         * Возвращает данные пользователя из localStorage
+         */
         function getUser() {
             try {
                 return JSON.parse(localStorage.getItem('user') || '{}');
@@ -310,11 +327,17 @@
             }
         }
 
+        /**
+         * Возвращает заголовок авторизации для fetch-запросов
+         */
         function getAuthHeader() {
             const token = getAccessToken();
             return token ? { 'Authorization': 'Bearer ' + token } : {};
         }
 
+        /**
+         * Проверка аутентификации и роли преподавателя
+         */
         (function checkAuth() {
             const token = getAccessToken();
             const userData = getUser();
@@ -323,6 +346,9 @@
             }
         })();
 
+        /**
+         * Обработчик кнопки выхода из системы
+         */
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', function(e) {
@@ -341,6 +367,9 @@
             });
         }
 
+        /**
+         * Обновляет отображение выбранного файла в форме загрузки
+         */
         function updateFileLabel(input) {
             var fileNameSpan = document.getElementById('fileName');
             var fileUpload = document.querySelector('.file-upload');
@@ -362,6 +391,9 @@
             }
         }
 
+        /**
+         * Возвращает описание базы данных для отображения
+         */
         function getDatabaseDescription(dbName) {
             var descriptions = {
                 'sql_tutor_university_db': '📚 основная учебная база (студенты, курсы)',
@@ -371,6 +403,9 @@
             return descriptions[dbName] || '📁 учебная база';
         }
 
+        /**
+         * Добавляет сообщение в лог-контейнер
+         */
         function addLogMessage(message, type) {
             var logMessages = document.getElementById('logMessages');
             var logEntry = document.createElement('div');
@@ -381,6 +416,9 @@
             logMessages.scrollTop = logMessages.scrollHeight;
         }
 
+        /**
+         * Загружает и отображает список существующих баз данных
+         */
         function loadDatabases() {
             fetch('/api/teacher?action=list', { headers: getAuthHeader() })
                 .then(function(response) {
@@ -420,6 +458,9 @@
                 });
         }
 
+        /**
+         * Удаляет базу данных
+         */
         function deleteDatabase(dbName) {
             if (dbName === 'sql_tutor_university_db') {
                 if (!confirm('⚠️ Это основная база проекта. Вы уверены, что хотите её удалить?')) return;
@@ -447,6 +488,9 @@
             }
         }
 
+        /**
+         * Загружает и отображает активные сессии студентов
+         */
         function loadSessions() {
             fetch('/api/teacher?action=sessions', { headers: getAuthHeader() })
                 .then(function(response) {
@@ -463,7 +507,9 @@
                         var html = '<table class="results-table">';
                         html += '<thead>';
                         html += '<tr>';
+                        html += '<th>Студент</th>';
                         html += '<th>Сессия</th>';
+                        html += '<th>База данных</th>';
                         html += '<th>Последний запрос</th>';
                         html += '<th>Время</th>';
                         html += '</tr>';
@@ -475,7 +521,9 @@
                             var time = new Date(s.lastAccess).toLocaleTimeString();
                             var shortQuery = s.lastQuery.length > 50 ? s.lastQuery.substring(0, 50) + '...' : s.lastQuery;
                             html += '<tr>';
+                            html += '<td>' + escapeHtml(s.login) + '</td>';
                             html += '<td>' + s.sessionId.substring(0, 8) + '...</td>';
+                            html += '<td>' + escapeHtml(s.dbName) + '</td>';
                             html += '<td title="' + escapeHtml(s.lastQuery) + '">' + escapeHtml(shortQuery) + '</td>';
                             html += '<td>' + time + '</td>';
                             html += '</tr>';
@@ -493,6 +541,7 @@
                 });
         }
 
+        // Инициализация компонентов управления студентами
         const generateBtn = document.getElementById('generateStudentsBtn');
         const groupNameInput = document.getElementById('groupName');
         const studentCountInput = document.getElementById('studentCount');
@@ -501,6 +550,9 @@
         const downloadExcelBtn = document.getElementById('downloadExcelBtn');
         window.generatedStudents = [];
 
+        /**
+         * Обработчик генерации студентов
+         */
         if (generateBtn) {
             generateBtn.addEventListener('click', async () => {
                 const groupName = groupNameInput.value.trim();
@@ -563,6 +615,9 @@
             });
         }
 
+        /**
+         * Обработчик скачивания CSV со сгенерированными студентами
+         */
         if (downloadExcelBtn) {
             downloadExcelBtn.addEventListener('click', () => {
                 if (!window.generatedStudents || window.generatedStudents.length === 0) {
@@ -598,6 +653,9 @@
             });
         }
 
+        /**
+         * Обработчик загрузки SQL-скрипта
+         */
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
             var fileInput = document.getElementById('sqlFile');
@@ -621,6 +679,7 @@
             formData.append('action', 'upload');
             formData.append('sqlFile', file);
 
+            // Подключение к потоку логов через Server-Sent Events
             var eventSource = new EventSource('/api/logs');
             eventSource.onmessage = function(event) {
                 try {
@@ -675,8 +734,10 @@
             xhr.send(formData);
         });
 
+        // Загрузка начальных данных
         loadDatabases();
         loadSessions();
+        // Автообновление списка сессий каждые 5 секунд
         setInterval(loadSessions, 5000);
     </script>
 </body>

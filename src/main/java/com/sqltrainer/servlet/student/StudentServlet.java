@@ -55,18 +55,21 @@ public class StudentServlet extends HttpServlet {
      */
     public static class SessionInfo {
         private final String sessionId;
+        private final String login;
         private final String lastQuery;
         private final Date lastAccess;
         private final String dbName;
 
-        public SessionInfo(String sessionId, String dbName, String lastQuery) {
+        public SessionInfo(String sessionId, String login, String dbName, String lastQuery) {
             this.sessionId = sessionId;
+            this.login = login;
             this.dbName = dbName;
             this.lastQuery = lastQuery;
             this.lastAccess = new Date();
         }
 
         public String getSessionId() { return sessionId; }
+        public String getLogin() { return login; }
         public String getDbName() { return dbName; }
         public String getLastQuery() { return lastQuery; }
         public Date getLastAccess() { return lastAccess; }
@@ -116,6 +119,7 @@ public class StudentServlet extends HttpServlet {
 
         HttpSession session = req.getSession(true);
         String sessionId = session.getId();
+        String login = (String) req.getAttribute("login");
 
         // Rate limiting
         Long lastRequest = lastRequestTime.get(userId);
@@ -130,7 +134,7 @@ public class StudentServlet extends HttpServlet {
             cleanOldRateLimits();
         }
 
-        activeSessions.put(sessionId, new SessionInfo(sessionId, dbName, query));
+        activeSessions.put(sessionId, new SessionInfo(sessionId, login, dbName, query));
         cleanOldSessions();
 
         if (log.isDebugEnabled()) {
