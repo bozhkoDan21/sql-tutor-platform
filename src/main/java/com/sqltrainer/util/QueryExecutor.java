@@ -375,4 +375,85 @@ public class QueryExecutor {
     public static int getMaxConcurrentQueries() {
         return MAX_CONCURRENT_QUERIES;
     }
+
+    /**
+     * Выполняет запрос от имени преподавателя.
+     * Без ограничений на тип запроса, с увеличенным таймаутом.
+     */
+    public static QueryResult executeAsTeacher(String dbName, String sql, boolean needExplain) {
+        if (sql == null || sql.trim().isEmpty()) {
+            return errorResult("Query is empty");
+        }
+
+        long startTime = System.currentTimeMillis();
+        QueryResult result = new QueryResult();
+
+        try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, dbName);
+             Statement stmt = conn.createStatement()) {
+
+            // Для преподавателя увеличенный таймаут (30 секунд)
+            stmt.setQueryTimeout(30);
+            // Без ограничения на количество строк для преподавателя
+            // stmt.setMaxRows(...); - убрано
+
+            if (needExplain) {
+                ExplainResult explainResult = getExplainPlan(stmt, sql);
+                result.setExplainJson(explainResult.json);
+                result.setExplainText(explainResult.text);
+            } else {
+                result.setExplainJson(null);
+                result.setExplainText(null);
+            }
+
+            boolean isSelect = sql.trim().toLowerCase().startsWith("select");
+
+            if (isSelect) {
+                // SELECT запрос - возвращаем результат
+                try (ResultSet rs = stmt.executeQuery(sql)) {
+                    ResultSetMetaData meta = rs.getMetaData();
+                    int columnCount = meta.getColumnCount();
+
+                    List<String> columns = new ArrayList<>();
+                    for (int i = 1; i <= columnCount; i++) {
+                        columns.add(meta.getColumnName(i));
+                    }
+                    result.setColumns(columns);
+
+                    List<Map<String, Object>> rows = new ArrayList<>();
+                    while (rs.next()) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int i = 1; i <= columnCount; i++) {
+                            row.put(meta.getColumnName(i), rs.getObject(i));
+                        }
+                        rows.add(row);
+                    }
+                    result.setRows(rows);
+                    result.setSuccess(true);
+                }
+            } else {
+                // Не SELECT запрос (INSERT, UPDATE, DELETE, CREATE, DROP и т.д.)
+                int affectedRows = stmt.executeUpdate(sql);
+                result.setSuccess(true);
+                result.setColumns(new ArrayList<>());
+                result.setRows(new ArrayList<>());
+                // Можно добавить сообщение о результатах
+                result.setExplainJson(null);
+                result.setExplainText(null);
+            }
+
+            long executionTime = System.currentTimeMillis() - startTime;
+            result.setExecutionTimeMs(executionTime);
+
+            if (log.isDebugEnabled()) {
+                log.debug("Teacher query executed in {} ms on database {}", executionTime, dbName);
+            }
+
+        } catch (SQLException e) {
+            String errorMsg = handleSQLError(e);
+            log.error("Teacher query failed on database {}: {}", dbName, errorMsg);
+            result.setError(errorMsg);
+        }
+
+        return result;
+    }
 }

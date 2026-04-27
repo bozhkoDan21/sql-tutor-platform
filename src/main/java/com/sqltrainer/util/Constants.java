@@ -71,8 +71,6 @@ public final class Constants {
 
     /** Защищённые базы данных (нельзя удалить) */
     public static final String[] PROTECTED_DATABASES = {
-            "sql_tutor_university_db",
-            "archaeology_10m",
             "postgres",
             "template0",
             "template1"

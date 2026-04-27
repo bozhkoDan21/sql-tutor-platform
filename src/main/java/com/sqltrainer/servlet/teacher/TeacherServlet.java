@@ -41,7 +41,7 @@ public class TeacherServlet extends HttpServlet {
     private static final Set<String> ALLOWED_EXTENSIONS = new HashSet<>(Arrays.asList(Constants.ALLOWED_SQL_EXTENSIONS));
     private static final Pattern DB_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
-    // Защищённые базы данных, которые нельзя удалить
+    // Защищённые базы данных (только системные PostgreSQL)
     private static final Set<String> PROTECTED_DATABASES = new HashSet<>(Arrays.asList(
             Constants.PROTECTED_DATABASES
     ));
@@ -141,8 +141,9 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
+        // Запрещаем создание системных баз PostgreSQL
         if (PROTECTED_DATABASES.contains(dbName.toLowerCase())) {
-            response.put("error", "Cannot create database with reserved name: " + dbName);
+            response.put("error", "Cannot create database with system name: " + dbName);
             return;
         }
 
@@ -396,7 +397,8 @@ public class TeacherServlet extends HttpServlet {
     }
 
     /**
-     * Удаляет базу данных. Защищённые базы удалить нельзя.
+     * Удаляет базу данных.
+     * Преподаватель может удалить ЛЮБУЮ базу, кроме системных PostgreSQL.
      */
     private void handleDelete(Connection conn, String dbName, Map<String, Object> response) {
         if (dbName == null || dbName.isEmpty()) {
@@ -404,9 +406,9 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
+        // Запрещаем удаление только системных баз PostgreSQL
         if (PROTECTED_DATABASES.contains(dbName.toLowerCase())) {
-            response.put("error", "Cannot delete protected database: " + dbName +
-                    ". This is a system or demo database required for learning.");
+            response.put("error", "Cannot delete system database: " + dbName);
             return;
         }
 

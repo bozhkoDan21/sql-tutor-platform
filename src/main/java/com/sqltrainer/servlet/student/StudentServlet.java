@@ -29,8 +29,9 @@ import java.util.concurrent.TimeUnit;
 import static com.sqltrainer.util.Constants.*;
 
 /**
- * Сервлет для выполнения SQL-запросов студентами.
- * Поддерживает только SELECT запросы, ограничивает время выполнения и количество строк.
+ * Сервлет для выполнения SQL-запросов.
+ * Студенты могут выполнять только SELECT запросы с ограничениями.
+ * Преподаватели могут выполнять любые SQL команды.
  */
 @WebServlet("/api/execute")
 public class StudentServlet extends HttpServlet {
@@ -149,49 +150,70 @@ public class StudentServlet extends HttpServlet {
             return;
         }
 
+        String role = (String) req.getAttribute("role");
         HttpSession session = req.getSession(true);
         String sessionId = session.getId();
         String login = (String) req.getAttribute("login");
 
-        // Проверка, не заблокирована ли текущая сессия
-        SessionInfo existing = activeSessions.get(sessionId);
-        if (existing != null && existing.isBlocked()) {
-            log.warn("Blocked session {} attempted to execute query for user {}", sessionId, login);
-            resp.getWriter().write("{\"error\":\"Your session has been terminated by teacher. Please re-login.\"}");
-            return;
+        // Проверка, не заблокирована ли текущая сессия (только для студентов)
+        if (!"teacher".equals(role)) {
+            SessionInfo existing = activeSessions.get(sessionId);
+            if (existing != null && existing.isBlocked()) {
+                log.warn("Blocked session {} attempted to execute query for user {}", sessionId, login);
+                resp.getWriter().write("{\"error\":\"Your session has been terminated by teacher. Please re-login.\"}");
+                return;
+            }
         }
 
-        // Проверка доступа к базе данных
-        if (!isDatabaseAccessibleToStudent(dbName, userId)) {
+        // Проверка прав доступа к базе данных
+        if (!isDatabaseAccessible(dbName, userId, role)) {
             log.warn("User {} attempted to access unauthorized database: {}", userId, dbName);
             resp.getWriter().write("{\"error\":\"Access denied to database: " + dbName + "\"}");
             return;
         }
 
-        // Rate limiting
-        Long lastRequest = lastRequestTime.get(userId);
-        if (lastRequest != null && System.currentTimeMillis() - lastRequest < MIN_REQUEST_INTERVAL_MS) {
-            log.warn("Rate limit exceeded for user {}", userId);
-            resp.getWriter().write("{\"error\":\"Too many requests. Please wait before sending another query.\"}");
+        // Для студентов: проверка, что запрос начинается с SELECT
+        if (!"teacher".equals(role) && !query.trim().toLowerCase().startsWith("select")) {
+            log.warn("Student {} attempted to execute non-SELECT query: {}", userId, query);
+            resp.getWriter().write("{\"error\":\"Only SELECT queries are allowed for students\"}");
             return;
         }
-        lastRequestTime.put(userId, System.currentTimeMillis());
 
-        if (lastRequestTime.size() > 1000) {
-            cleanOldRateLimits();
+        // Rate limiting (только для студентов)
+        if (!"teacher".equals(role)) {
+            Long lastRequest = lastRequestTime.get(userId);
+            if (lastRequest != null && System.currentTimeMillis() - lastRequest < MIN_REQUEST_INTERVAL_MS) {
+                log.warn("Rate limit exceeded for user {}", userId);
+                resp.getWriter().write("{\"error\":\"Too many requests. Please wait before sending another query.\"}");
+                return;
+            }
+            lastRequestTime.put(userId, System.currentTimeMillis());
+
+            if (lastRequestTime.size() > 1000) {
+                cleanOldRateLimits();
+            }
         }
 
         if (log.isDebugEnabled()) {
-            log.debug("Executing query on {} from user {}: {}", dbName, userId,
+            log.debug("Executing query on {} from user {} (role: {}): {}", dbName, userId, role,
                     query.length() > 100 ? query.substring(0, 100) + "..." : query);
         }
 
-        QueryExecutor.QueryResult result = QueryExecutor.executeAsStudent(dbName, query, needExplain);
+        // Выполнение запроса в зависимости от роли
+        QueryExecutor.QueryResult result;
+        if ("teacher".equals(role)) {
+            result = QueryExecutor.executeAsTeacher(dbName, query, needExplain);
+        } else {
+            result = QueryExecutor.executeAsStudent(dbName, query, needExplain);
+        }
+
         long executionTime = result.getExecutionTimeMs();
 
-        // Обновляем сессию после выполнения запроса
-        activeSessions.put(sessionId, new SessionInfo(sessionId, login, dbName, query, executionTime));
-        cleanOldSessions();
+        // Обновляем сессию после выполнения запроса (только для студентов)
+        if (!"teacher".equals(role)) {
+            activeSessions.put(sessionId, new SessionInfo(sessionId, login, dbName, query, executionTime));
+            cleanOldSessions();
+        }
 
         resp.getWriter().write(gson.toJson(result));
 
@@ -205,10 +227,15 @@ public class StudentServlet extends HttpServlet {
     }
 
     /**
-     * Проверяет, имеет ли студент доступ к указанной базе данных.
-     * Сначала проверяет по списку разрешённых баз, затем через права PostgreSQL.
+     * Проверяет, имеет ли пользователь доступ к указанной базе данных.
+     * Преподаватели имеют доступ ко всем базам.
+     * Студенты - только к разрешённым или через права PostgreSQL.
      */
-    private boolean isDatabaseAccessibleToStudent(String dbName, Long userId) {
+    private boolean isDatabaseAccessible(String dbName, Long userId, String role) {
+        if ("teacher".equals(role)) {
+            return true;
+        }
+
         if (ALLOWED_DATABASES.contains(dbName)) {
             return true;
         }
@@ -228,7 +255,6 @@ public class StudentServlet extends HttpServlet {
             log.warn("Failed to check database access for {}: {}", dbName, e.getMessage());
         }
 
-        log.warn("User {} denied access to database {}", userId, dbName);
         return false;
     }
 
