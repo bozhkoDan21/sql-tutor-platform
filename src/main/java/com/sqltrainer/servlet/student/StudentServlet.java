@@ -22,6 +22,9 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static com.sqltrainer.util.Constants.*;
 
@@ -45,10 +48,39 @@ public class StudentServlet extends HttpServlet {
     private static int queryCounter = 0;
     private static long lastLogTime = System.currentTimeMillis();
 
+    // Планировщик для очистки заблокированных сессий
+    private static final ScheduledExecutorService cleanupScheduler = Executors.newSingleThreadScheduledExecutor();
+
     // Список баз данных, доступных студентам
     private static final Set<String> ALLOWED_DATABASES = new HashSet<>(Arrays.asList(
             Constants.ALLOWED_STUDENT_DATABASES
     ));
+
+    static {
+        // Запускаем очистку заблокированных сессий каждую минуту
+        cleanupScheduler.scheduleAtFixedRate(() -> {
+            try {
+                long now = System.currentTimeMillis();
+                long blockedThreshold = now - 5 * 60 * 1000; // 5 минут
+
+                int removed = 0;
+                var iterator = activeSessions.values().iterator();
+                while (iterator.hasNext()) {
+                    SessionInfo info = iterator.next();
+                    // Удаляем заблокированные сессии старше 5 минут
+                    if (info.isBlocked() && info.getLastAccess().getTime() < blockedThreshold) {
+                        iterator.remove();
+                        removed++;
+                    }
+                }
+                if (removed > 0) {
+                    log.info("Scheduled cleanup: removed {} old blocked sessions", removed);
+                }
+            } catch (Exception e) {
+                log.warn("Cleanup error: {}", e.getMessage());
+            }
+        }, 1, 1, TimeUnit.MINUTES);
+    }
 
     /**
      * Информация о сессии студента для преподавателя.
@@ -59,13 +91,17 @@ public class StudentServlet extends HttpServlet {
         private final String lastQuery;
         private final Date lastAccess;
         private final String dbName;
+        private final long lastQueryTimeMs;
+        private boolean blocked;
 
-        public SessionInfo(String sessionId, String login, String dbName, String lastQuery) {
+        public SessionInfo(String sessionId, String login, String dbName, String lastQuery, long lastQueryTimeMs) {
             this.sessionId = sessionId;
             this.login = login;
             this.dbName = dbName;
             this.lastQuery = lastQuery;
             this.lastAccess = new Date();
+            this.lastQueryTimeMs = lastQueryTimeMs;
+            this.blocked = false;
         }
 
         public String getSessionId() { return sessionId; }
@@ -73,6 +109,9 @@ public class StudentServlet extends HttpServlet {
         public String getDbName() { return dbName; }
         public String getLastQuery() { return lastQuery; }
         public Date getLastAccess() { return lastAccess; }
+        public long getLastQueryTimeMs() { return lastQueryTimeMs; }
+        public boolean isBlocked() { return blocked; }
+        public void setBlocked(boolean blocked) { this.blocked = blocked; }
     }
 
     public static ConcurrentHashMap<String, SessionInfo> getActiveSessions() {
@@ -110,16 +149,24 @@ public class StudentServlet extends HttpServlet {
             return;
         }
 
+        HttpSession session = req.getSession(true);
+        String sessionId = session.getId();
+        String login = (String) req.getAttribute("login");
+
+        // Проверка, не заблокирована ли текущая сессия
+        SessionInfo existing = activeSessions.get(sessionId);
+        if (existing != null && existing.isBlocked()) {
+            log.warn("Blocked session {} attempted to execute query for user {}", sessionId, login);
+            resp.getWriter().write("{\"error\":\"Your session has been terminated by teacher. Please re-login.\"}");
+            return;
+        }
+
         // Проверка доступа к базе данных
         if (!isDatabaseAccessibleToStudent(dbName, userId)) {
             log.warn("User {} attempted to access unauthorized database: {}", userId, dbName);
             resp.getWriter().write("{\"error\":\"Access denied to database: " + dbName + "\"}");
             return;
         }
-
-        HttpSession session = req.getSession(true);
-        String sessionId = session.getId();
-        String login = (String) req.getAttribute("login");
 
         // Rate limiting
         Long lastRequest = lastRequestTime.get(userId);
@@ -134,15 +181,18 @@ public class StudentServlet extends HttpServlet {
             cleanOldRateLimits();
         }
 
-        activeSessions.put(sessionId, new SessionInfo(sessionId, login, dbName, query));
-        cleanOldSessions();
-
         if (log.isDebugEnabled()) {
             log.debug("Executing query on {} from user {}: {}", dbName, userId,
                     query.length() > 100 ? query.substring(0, 100) + "..." : query);
         }
 
         QueryExecutor.QueryResult result = QueryExecutor.executeAsStudent(dbName, query, needExplain);
+        long executionTime = result.getExecutionTimeMs();
+
+        // Обновляем сессию после выполнения запроса
+        activeSessions.put(sessionId, new SessionInfo(sessionId, login, dbName, query, executionTime));
+        cleanOldSessions();
+
         resp.getWriter().write(gson.toJson(result));
 
         queryCounter++;

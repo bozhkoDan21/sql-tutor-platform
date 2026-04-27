@@ -502,6 +502,9 @@
                     return response.json();
                 })
                 .then(function(data) {
+                    var currentUser = getUser();
+                    var currentLogin = currentUser.login;
+
                     var list = document.getElementById('sessionsList');
                     if (data.sessions && data.sessions.length > 0) {
                         var html = '<table class="results-table">';
@@ -511,7 +514,10 @@
                         html += '<th>Сессия</th>';
                         html += '<th>База данных</th>';
                         html += '<th>Последний запрос</th>';
-                        html += '<th>Время</th>';
+                        html += '<th>Время выполнения</th>';
+                        html += '<th>Время запроса</th>';
+                        html += '<th>Статус</th>';
+                        html += '<th>Действия</th>';
                         html += '</tr>';
                         html += '</thead>';
                         html += '<tbody>';
@@ -519,17 +525,33 @@
                         for (var i = 0; i < data.sessions.length; i++) {
                             var s = data.sessions[i];
                             var time = new Date(s.lastAccess).toLocaleTimeString();
-                            var shortQuery = s.lastQuery.length > 50 ? s.lastQuery.substring(0, 50) + '...' : s.lastQuery;
+                            var shortQuery = s.lastQuery && s.lastQuery.length > 50 ? s.lastQuery.substring(0, 50) + '...' : (s.lastQuery || '—');
+
+                            var statusHtml = s.blocked ? '<span style="color: red;">🔴 Заблокирована</span>' : '<span style="color: green;">🟢 Активна</span>';
+
+                            var isOwnSession = (s.login === currentLogin);
+                            var actionHtml = '';
+                            if (s.blocked) {
+                                actionHtml = '<span style="color: gray;">Завершена</span>';
+                            } else if (isOwnSession) {
+                                actionHtml = '<span style="color: gray;" title="Нельзя завершить свою сессию">⚠️ Своя сессия</span>';
+                            } else {
+                                actionHtml = '<button class="btn-terminate" onclick="terminateSession(\'' + s.sessionId + '\')">🔴 Завершить</button>';
+                            }
+
                             html += '<tr>';
-                            html += '<td>' + escapeHtml(s.login) + '</td>';
-                            html += '<td>' + s.sessionId.substring(0, 8) + '...</td>';
-                            html += '<td>' + escapeHtml(s.dbName) + '</td>';
-                            html += '<td title="' + escapeHtml(s.lastQuery) + '">' + escapeHtml(shortQuery) + '</td>';
-                            html += '<td>' + time + '</td>';
+                            html += '<td style="white-space: nowrap;">' + escapeHtml(s.login || '—') + '</td>';
+                            html += '<td style="font-family: monospace; font-size: 0.75rem;">' + (s.sessionId ? s.sessionId.substring(0, 8) + '...' : '—') + '</td>';
+                            html += '<td style="white-space: nowrap;">' + escapeHtml(s.dbName || '—') + '</td>';
+                            html += '<td title="' + escapeHtml(s.lastQuery || '') + '" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + escapeHtml(shortQuery) + '</td>';
+                            html += '<td style="text-align: center;">' + (s.lastQueryTimeMs || 0) + ' ms</td>';
+                            html += '<td style="white-space: nowrap;">' + time + '</td>';
+                            html += '<td style="text-align: center;">' + statusHtml + '</td>';
+                            html += '<td style="text-align: center;">' + actionHtml + '</td>';
                             html += '</tr>';
                         }
                         html += '</tbody>';
-                        html += '</table>';
+                        html += '<td>';
                         list.innerHTML = html;
                     } else {
                         list.innerHTML = '<div class="empty-state">Нет активных сессий</div>';
@@ -539,6 +561,41 @@
                     console.error("Sessions fetch error:", error);
                     document.getElementById('sessionsList').innerHTML = '<div class="empty-state">Ошибка загрузки сессий</div>';
                 });
+        }
+
+        /**
+         * Завершает сессию студента
+         */
+        async function terminateSession(sessionId) {
+            if (!confirm('Завершить сессию студента? Он будет вынужден перезайти в систему.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/teacher', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Authorization': 'Bearer ' + getAccessToken()
+                    },
+                    body: new URLSearchParams({
+                        'action': 'terminateSession',
+                        'sessionId': sessionId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    loadSessions();
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Не удалось завершить сессию'));
+                }
+            } catch (error) {
+                console.error('Terminate session error:', error);
+                alert('Ошибка соединения с сервером');
+            }
         }
 
         // Инициализация компонентов управления студентами

@@ -1,6 +1,7 @@
 package com.sqltrainer.servlet.auth;
 
 import com.sqltrainer.config.DatabaseConfig;
+import com.sqltrainer.servlet.student.StudentServlet;
 import com.sqltrainer.util.JwtUtil;
 import com.google.gson.Gson;
 import org.mindrot.jbcrypt.BCrypt;
@@ -11,6 +12,7 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 import java.io.IOException;
 import java.sql.*;
 import java.util.HashMap;
@@ -79,6 +81,28 @@ public class AuthServlet extends HttpServlet {
             return;
         }
 
+        // Удаляем ВСЕ старые сессии этого пользователя из activeSessions
+        var sessions = StudentServlet.getActiveSessions();
+        int removedCount = 0;
+        var iterator = sessions.values().iterator();
+        while (iterator.hasNext()) {
+            var info = iterator.next();
+            if (info.getLogin().equals(login)) {
+                iterator.remove();
+                removedCount++;
+            }
+        }
+        if (removedCount > 0) {
+            log.info("Removed {} old sessions for user: {}", removedCount, login);
+        }
+
+        // Инвалидируем старую HTTP сессию если есть
+        HttpSession oldSession = req.getSession(false);
+        if (oldSession != null) {
+            oldSession.invalidate();
+            log.info("Invalidated HTTP session for user: {}", login);
+        }
+
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.ADMIN, null)) {
             String sql = "SELECT id, login, full_name, email, role, password_hash, is_active FROM users WHERE login = ?";
 
@@ -95,6 +119,7 @@ public class AuthServlet extends HttpServlet {
                     if (BCrypt.checkpw(password, rs.getString("password_hash"))) {
                         Long userId = rs.getLong("id");
                         String role = rs.getString("role");
+
                         String accessToken = JwtUtil.generateAccessToken(userId, role, login);
                         String refreshToken = JwtUtil.generateRefreshToken(userId, role);
 
@@ -181,7 +206,7 @@ public class AuthServlet extends HttpServlet {
 
     /**
      * Выход из системы.
-     * Отзывает refresh токен, делая его недействительным.
+     * Отзывает refresh токен и удаляет сессию из активных сессий.
      */
     private void handleLogout(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String authHeader = req.getHeader("Authorization");
@@ -189,6 +214,24 @@ public class AuthServlet extends HttpServlet {
             String token = authHeader.substring(7);
             try {
                 Long userId = JwtUtil.getUserIdFromToken(token);
+                String login = JwtUtil.getLoginFromToken(token);
+
+                // Удаляем сессию пользователя из activeSessions
+                var sessions = StudentServlet.getActiveSessions();
+                int removedCount = 0;
+                var iterator = sessions.values().iterator();
+                while (iterator.hasNext()) {
+                    var info = iterator.next();
+                    if (info.getLogin().equals(login)) {
+                        iterator.remove();
+                        removedCount++;
+                    }
+                }
+                if (removedCount > 0) {
+                    log.info("Removed {} sessions for user {} during logout", removedCount, login);
+                }
+
+                // Отзываем refresh токен
                 try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.ADMIN, null)) {
                     String sql = "UPDATE refresh_tokens SET revoked = true WHERE user_id = ?";
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {

@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 /**
  * Сервлет для управления учебными базами данных преподавателем.
  * Позволяет создавать новые БД из SQL-скриптов, удалять существующие,
- * просматривать активные сессии студентов.
+ * просматривать активные сессии студентов и завершать их.
  */
 @WebServlet("/api/teacher")
 @MultipartConfig(
@@ -71,6 +71,9 @@ public class TeacherServlet extends HttpServlet {
             } else if ("sessions".equals(action)) {
                 Map<String, StudentServlet.SessionInfo> sessions = StudentServlet.getActiveSessions();
                 response.put("sessions", new ArrayList<>(sessions.values()));
+            } else if ("terminateSession".equals(action)) {
+                String sessionId = req.getParameter("sessionId");
+                handleTerminateSession(sessionId, response);
             } else {
                 response.put("error", "Unknown action: " + action);
             }
@@ -86,6 +89,29 @@ public class TeacherServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         doPost(req, resp);
+    }
+
+    /**
+     * Завершает сессию студента.
+     */
+    private void handleTerminateSession(String sessionId, Map<String, Object> response) {
+        if (sessionId == null || sessionId.isEmpty()) {
+            response.put("error", "Session ID is required");
+            return;
+        }
+
+        Map<String, StudentServlet.SessionInfo> sessions = StudentServlet.getActiveSessions();
+        StudentServlet.SessionInfo info = sessions.get(sessionId);
+
+        if (info != null) {
+            info.setBlocked(true);
+            response.put("success", true);
+            response.put("message", "Session terminated: " + sessionId.substring(0, 8) + "...");
+            log.info("Teacher terminated session: {} for user {}", sessionId.substring(0, 8), info.getLogin());
+        } else {
+            response.put("error", "Session not found or already terminated");
+            log.warn("Session not found: {}", sessionId);
+        }
     }
 
     /**

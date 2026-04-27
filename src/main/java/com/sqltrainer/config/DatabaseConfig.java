@@ -165,6 +165,7 @@ public class DatabaseConfig {
             stmt.execute("SET idle_in_transaction_session_timeout = '30s'");
             stmt.execute("SET client_encoding = 'UTF8'");
             stmt.execute("SET NAMES 'UTF8'");
+            stmt.execute("SET timezone = 'Europe/Moscow'");
         } catch (SQLException e) {
             log.warn("Could not set student session limits: {}", e.getMessage());
         }

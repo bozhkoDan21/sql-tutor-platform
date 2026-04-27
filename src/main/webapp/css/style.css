@@ -1325,6 +1325,32 @@ li.CodeMirror-hint-active {
     overflow-x: auto;
 }
 
+.btn-terminate {
+    background: none;
+    border: 2px solid var(--danger-light);
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 2rem;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.btn-terminate:hover {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: white;
+}
+
+.status-active {
+    color: green;
+}
+
+.status-blocked {
+    color: red;
+}
+
 /* Утилиты */
 .text-center { text-align: center; }
 .mt-2 { margin-top: 0.5rem; }
