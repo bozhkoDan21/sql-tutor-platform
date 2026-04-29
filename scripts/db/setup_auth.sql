@@ -29,7 +29,7 @@ CREATE TABLE users (
 );
 
 -- ============================================
--- ТАБЛИЦА REFRESH TOKEN'ОВ
+-- ТАБЛИЦА REFRESH TOKEНОВ
 -- ============================================
 
 CREATE TABLE refresh_tokens (

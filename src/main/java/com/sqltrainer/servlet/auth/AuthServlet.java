@@ -259,7 +259,7 @@ public class AuthServlet extends HttpServlet {
         }
 
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.ADMIN, null)) {
-            String sql = "SELECT id, login, full_name, email, role, group_name, avatar_url FROM users WHERE id = ?";
+            String sql = "SELECT id, login, full_name, email, role, group_name FROM users WHERE id = ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setLong(1, userId);
                 ResultSet rs = stmt.executeQuery();
@@ -274,7 +274,6 @@ public class AuthServlet extends HttpServlet {
                     userMap.put("email", rs.getString("email"));
                     userMap.put("role", rs.getString("role"));
                     userMap.put("groupName", rs.getString("group_name"));
-                    userMap.put("avatarUrl", rs.getString("avatar_url"));
                     response.put("user", userMap);
 
                     resp.getWriter().write(gson.toJson(response));
