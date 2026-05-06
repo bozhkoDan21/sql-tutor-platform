@@ -247,7 +247,7 @@ public class TeacherServlet extends HttpServlet {
     private void handleUpdateDatabaseMetadata(Connection conn, String dbName, String displayName,
                                               String folderId, String accessPassword, String isVisible,
                                               String accessStartStr, String accessEndStr,
-                                              String removePasswordParam,  // Добавить этот параметр
+                                              String removePasswordParam,
                                               Map<String, Object> response) {
         if (dbName == null || dbName.isEmpty()) {
             response.put("error", "Database name is required");
@@ -463,6 +463,23 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
+        // Проверяем, существует ли папка (если указана)
+        if (folderId != null && !folderId.isEmpty()) {
+            try {
+                long folderIdLong = Long.parseLong(folderId);
+                try (PreparedStatement checkStmt = conn.prepareStatement("SELECT id FROM database_folders WHERE id = ?")) {
+                    checkStmt.setLong(1, folderIdLong);
+                    if (!checkStmt.executeQuery().next()) {
+                        response.put("error", "Selected folder does not exist");
+                        return;
+                    }
+                }
+            } catch (NumberFormatException e) {
+                response.put("error", "Invalid folder ID format");
+                return;
+            }
+        }
+
         QueryExecutor.clearCache();
         log.info("Cache cleared before creating database: {}", dbName);
 
@@ -522,6 +539,8 @@ public class TeacherServlet extends HttpServlet {
                 stmt.executeUpdate();
             } catch (SQLException e) {
                 log.warn("Failed to insert database metadata: {}", e.getMessage());
+                response.put("error", "Failed to save database metadata: " + e.getMessage());
+                // Не возвращаем тут, база уже создана, просто логируем
             }
         }
 
@@ -602,22 +621,6 @@ public class TeacherServlet extends HttpServlet {
         } catch (SQLException e) {
             log.error("Failed to drop database: {}", originalDbName, e);
             throw e;
-        }
-    }
-
-    /**
-     * Предоставляет доступ студентам к созданной базе данных.
-     */
-    private void grantStudentAccess(Connection conn, String quotedDbName, String dbName) throws SQLException {
-        try (Statement stmt = conn.createStatement()) {
-            String grantConnectSql = "GRANT CONNECT ON DATABASE " + quotedDbName + " TO students";
-            log.debug("Executing: {}", grantConnectSql);
-            stmt.executeUpdate(grantConnectSql);
-        }
-
-        try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, dbName);
-             Statement stmt = dbConn.createStatement()) {
-            stmt.executeUpdate("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO students");
         }
     }
 
