@@ -693,18 +693,32 @@ function displayExplain(explainData, explainText) {
 
     if (!treeView || !textView) return;
 
-    if (explainData && explainData !== explainText) {
-        treeView.innerHTML = renderExplainTree(explainData);
-    } else {
-        treeView.innerHTML = renderExplainTree(explainText);
+    // Проверка на пустые данные
+    const hasExplainData = explainData && explainData.trim && explainData.trim().length > 0;
+    const hasExplainText = explainText && explainText.trim && explainText.trim().length > 0;
+
+    if (!hasExplainData && !hasExplainText) {
+        treeView.innerHTML = '<div class="empty-state">Нет данных EXPLAIN для этого запроса</div>';
+        textView.textContent = '-- EXPLAIN ANALYZE не вернул данных';
+        treeView.style.display = 'block';
+        textView.style.display = 'none';
+        return;
     }
 
-    if (explainText) {
+    if (explainData && explainData !== explainText) {
+        treeView.innerHTML = renderExplainTree(explainData);
+    } else if (explainText) {
+        treeView.innerHTML = renderExplainTree(explainText);
+    } else {
+        treeView.innerHTML = renderExplainTree(explainData);
+    }
+
+    if (explainText && explainText.trim().length > 0) {
         textView.textContent = explainText;
-    } else if (typeof explainData === 'string') {
+    } else if (typeof explainData === 'string' && explainData.trim().length > 0) {
         textView.textContent = explainData;
     } else {
-        textView.textContent = 'Нет данных EXPLAIN';
+        textView.textContent = '-- Нет данных EXPLAIN ANALYZE';
     }
 
     treeView.style.display = 'block';
@@ -798,7 +812,17 @@ function downloadCSV() {
             return;
         }
 
-        const signature = generateSignature(query, data.executionTimeMs, data.rows.length, selectedDb);
+        // Используем ТОЛЬКО подпись с сервера
+        // Если сервер не вернул подпись - это ошибка, файл не должен быть сгенерирован
+        if (!data.signature) {
+            console.error('Server signature missing');
+            if (resultContainer) {
+                resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка: Не удалось получить подпись сервера</div>`;
+            }
+            return;
+        }
+
+        const signature = data.signature;
 
         let csv = '';
         csv += `# SQL Query: ${query.replace(/\n/g, ' ')}\n`;
@@ -845,20 +869,6 @@ function downloadCSV() {
             resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка соединения: ${error}</div>`;
         }
     });
-}
-
-/**
- * Генерирует подпись для CSV
- */
-function generateSignature(query, time, rows, dbName) {
-    const data = query + time + rows + dbName + new Date().toDateString();
-    let hash = 0;
-    for (let i = 0; i < data.length; i++) {
-        const char = data.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-    }
-    return Math.abs(hash).toString(16).padStart(8, '0');
 }
 
 /**

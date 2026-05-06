@@ -127,11 +127,12 @@ public class TeacherServlet extends HttpServlet {
                     String updateDisplayName = req.getParameter("displayName");
                     String updateFolderId = req.getParameter("folderId");
                     String updateAccessPassword = req.getParameter("accessPassword");
+                    String removePassword = req.getParameter("removePassword");
                     String isVisible = req.getParameter("isVisible");
                     String accessStart = req.getParameter("accessStart");
                     String accessEnd = req.getParameter("accessEnd");
                     handleUpdateDatabaseMetadata(conn, updateDbName, updateDisplayName, updateFolderId,
-                            updateAccessPassword, isVisible, accessStart, accessEnd, response);
+                            updateAccessPassword, isVisible, accessStart, accessEnd, removePassword, response);
                     break;
 
                 default:
@@ -246,6 +247,7 @@ public class TeacherServlet extends HttpServlet {
     private void handleUpdateDatabaseMetadata(Connection conn, String dbName, String displayName,
                                               String folderId, String accessPassword, String isVisible,
                                               String accessStartStr, String accessEndStr,
+                                              String removePasswordParam,  // Добавить этот параметр
                                               Map<String, Object> response) {
         if (dbName == null || dbName.isEmpty()) {
             response.put("error", "Database name is required");
@@ -264,14 +266,15 @@ public class TeacherServlet extends HttpServlet {
                 sql.append("folder_id = ?, ");
                 params.add(Long.parseLong(folderId));
             }
-            if (accessPassword != null) {
-                if (accessPassword.isEmpty()) {
-                    sql.append("access_password_hash = NULL, ");
-                } else {
-                    sql.append("access_password_hash = ?, ");
-                    params.add(BCrypt.hashpw(accessPassword, BCrypt.gensalt()));
-                }
+
+            // Обработка пароля
+            if ("true".equals(removePasswordParam)) {
+                sql.append("access_password_hash = NULL, ");
+            } else if (accessPassword != null && !accessPassword.isEmpty()) {
+                sql.append("access_password_hash = ?, ");
+                params.add(BCrypt.hashpw(accessPassword, BCrypt.gensalt()));
             }
+
             if (isVisible != null) {
                 sql.append("is_visible = ?, ");
                 params.add(Boolean.parseBoolean(isVisible));

@@ -408,6 +408,10 @@
             <div class="form-group">
                 <label>Пароль доступа (оставьте пустым для сохранения текущего)</label>
                 <input type="password" id="editAccessPassword" class="form-input" placeholder="Новый пароль">
+                <label style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="editRemovePasswordCheckbox" style="width: auto;">
+                    <span style="font-size: 0.85rem; color: var(--danger);">❌ Удалить пароль (сделать базу открытой)</span>
+                </label>
             </div>
             <div class="form-group">
                 <label>Видимость для студентов</label>

@@ -374,6 +374,7 @@ window.editDatabase = function(dbName, displayName, folderId, isVisible, accessS
     document.getElementById('editDbName').value = dbName;
     document.getElementById('editDisplayName').value = displayName || '';
     document.getElementById('editAccessPassword').value = '';
+    document.getElementById('editRemovePasswordCheckbox').checked = false;  // Добавить эту строку
 
     const visibleValue = (isVisible !== undefined && isVisible !== null) ? isVisible : true;
     document.getElementById('editIsVisible').value = visibleValue ? 'true' : 'false';
@@ -419,6 +420,7 @@ async function saveDatabaseMetadata() {
     const displayName = document.getElementById('editDisplayName').value;
     const folderId = document.getElementById('editFolderId').value;
     const accessPassword = document.getElementById('editAccessPassword').value;
+    const removePassword = document.getElementById('editRemovePasswordCheckbox').checked;
     const isVisible = document.getElementById('editIsVisible').value;
     const accessStart = document.getElementById('editAccessStart').value;
     const accessEnd = document.getElementById('editAccessEnd').value;
@@ -428,7 +430,14 @@ async function saveDatabaseMetadata() {
     formData.append('dbName', dbName);
     if (displayName) formData.append('displayName', displayName);
     if (folderId) formData.append('folderId', folderId);
-    if (accessPassword) formData.append('accessPassword', accessPassword);
+
+    // Если чекбокс отмечен - передаём специальный маркер для удаления пароля
+    if (removePassword) {
+        formData.append('removePassword', 'true');
+    } else if (accessPassword) {
+        formData.append('accessPassword', accessPassword);
+    }
+
     formData.append('isVisible', isVisible);
     if (accessStart) formData.append('accessStart', accessStart);
     if (accessEnd) formData.append('accessEnd', accessEnd);
@@ -644,8 +653,24 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
                     addLogMessage('✅ База данных успешно создана!', 'success');
                     setTimeout(() => {
                         overlay.style.display = 'none';
+
+                        // Полный сброс формы
                         document.getElementById('uploadForm').reset();
+
+                        // Ручной сброс текста файла
                         document.getElementById('fileName').textContent = 'Выберите SQL файл';
+
+                        // Сброс стилей file-upload
+                        const fileUpload = document.querySelector('#uploadForm .file-upload');
+                        if (fileUpload) {
+                            fileUpload.style.borderColor = 'var(--border)';
+                            fileUpload.style.background = 'var(--light)';
+                        }
+
+                        // Сброс значения поля пароля (на всякий случай)
+                        document.getElementById('accessPassword').value = '';
+
+                        // Перезагрузка списков
                         loadDatabasesList();
                         loadFoldersList();
                         loadFoldersForSelect();
