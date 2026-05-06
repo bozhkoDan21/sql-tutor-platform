@@ -1,4 +1,4 @@
-# test_xss.ps1 - исправленная версия
+# test_xss.ps1
 $BaseUrl = "http://localhost:8081"
 
 Write-Host ""
@@ -7,10 +7,13 @@ Write-Host "   XSS Protection Test"
 Write-Host "========================================="
 Write-Host ""
 
+# Сохраняем cookies для сессии
+$Session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+
 # 1. Проверка CSP заголовков
 Write-Host "[1/3] Checking CSP headers..." -ForegroundColor Cyan
 try {
-    $response = Invoke-WebRequest -Uri "$BaseUrl/index.jsp" -Method Get
+    $response = Invoke-WebRequest -Uri "$BaseUrl/index" -Method Get -WebSession $Session
     $csp = $response.Headers['Content-Security-Policy']
     $xssProtection = $response.Headers['X-XSS-Protection']
 
@@ -31,15 +34,13 @@ try {
 
 Write-Host ""
 
-# 2. Проверка аутентификации
-Write-Host "[2/3] Getting auth token..." -ForegroundColor Cyan
-$bodyJson = @{ login = "teacher"; password = "teacher123" } | ConvertTo-Json
+# 2. Аутентификация преподавателя
+Write-Host "[2/3] Teacher authentication..." -ForegroundColor Cyan
+$bodyJson = @{ password = "teacher123" } | ConvertTo-Json
 try {
-    $authResponse = Invoke-RestMethod -Uri "$BaseUrl/api/auth/login" -Method Post -Body $bodyJson -ContentType "application/json"
-    $Token = $authResponse.accessToken
-
-    if ($Token) {
-        Write-Host "  ✅ Authenticated successfully" -ForegroundColor Green
+    $authResponse = Invoke-RestMethod -Uri "$BaseUrl/api/login" -Method Post -Body $bodyJson -ContentType "application/json" -WebSession $Session
+    if ($authResponse.success -eq $true) {
+        Write-Host "  ✅ Authentication successful" -ForegroundColor Green
     } else {
         Write-Host "  ❌ Authentication failed" -ForegroundColor Red
         exit 1
@@ -51,32 +52,22 @@ try {
 
 Write-Host ""
 
-# 3. Тест XSS через API (исправленный)
+# 3. Тест XSS через SQL запрос
 Write-Host "[3/3] Testing XSS via SQL query..." -ForegroundColor Cyan
 
-# ПРАВИЛЬНОЕ экранирование для PostgreSQL
-# Используем $$ для raw строки (PostgreSQL syntax)
 $query = "SELECT '<script>alert(''XSS'')</script>' as test"
-
 Write-Host "  Query: $query" -ForegroundColor Gray
 
-$body = "database=sql_tutor_university_db&query=$query"
-$headers = @{ Authorization = "Bearer $Token" }
-
 try {
-    $response = Invoke-RestMethod -Uri "$BaseUrl/api/execute" -Method Post -Headers $headers -Body $body -ContentType "application/x-www-form-urlencoded"
+    $response = Invoke-RestMethod -Uri "$BaseUrl/api/execute" -Method Post -WebSession $Session -Body "database=sql_tutor_university_db&query=$query" -ContentType "application/x-www-form-urlencoded"
 
-    if ($response.success -and $response.rows) {
-        $resultValue = $response.rows[0].test
-
+    if ($response.success -eq $true) {
         Write-Host "  ✅ Query executed successfully" -ForegroundColor Green
+        $resultValue = $response.rows[0].test
         Write-Host "  Result contains: $resultValue" -ForegroundColor Yellow
 
-        # Проверяем, что результат не содержит выполняемый HTML
         if ($resultValue -match "<script>") {
             Write-Host "  ✅ XSS payload returned as plain text (safe)" -ForegroundColor Green
-        } else {
-            Write-Host "  Result: $resultValue" -ForegroundColor Gray
         }
     } else {
         Write-Host "  ❌ Query failed: $($response.error)" -ForegroundColor Red
@@ -90,8 +81,8 @@ Write-Host "========================================="
 Write-Host "   MANUAL TEST (most important)"
 Write-Host "========================================="
 Write-Host ""
-Write-Host "1. Open: http://localhost:8081/index.jsp" -ForegroundColor Cyan
-Write-Host "2. Login: teacher / teacher123"
+Write-Host "1. Open: http://localhost:8081/index" -ForegroundColor Cyan
+Write-Host "2. Login with password: teacher123" -ForegroundColor Cyan
 Write-Host "3. Select any database"
 Write-Host "4. Execute this query:" -ForegroundColor Yellow
 Write-Host ""

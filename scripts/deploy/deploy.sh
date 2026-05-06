@@ -93,13 +93,12 @@ fi
 # Спрашиваем про удаление данных
 echo "[2/5] Подготовка контейнеров..."
 echo ""
-echo "ВНИМАНИЕ! Генерация учебных баз данных может занять 30-40 минут."
-echo ""
-read -p "Удалить ВСЕ данные БД и пересоздать учебные базы? (y/N): " -n 1 -r
+read -p "Удалить ВСЕ данные БД и начать с чистого листа? (y/N): " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "${YELLOW}[INFO] Удаление данных БД...${NC}"
     docker-compose down -v 2>/dev/null
+    docker volume rm sql_trainer_postgres_data sql_trainer_uploads 2>/dev/null
     echo -e "${GREEN}[OK] Контейнеры остановлены, данные удалены${NC}"
     REMOVE_DATA=true
 else
@@ -123,12 +122,8 @@ echo ""
 
 # Ожидание готовности PostgreSQL
 echo "[4/5] Ожидание готовности PostgreSQL..."
-if [ "$REMOVE_DATA" = true ]; then
-    echo -e "${YELLOW}[INFO] PostgreSQL пересоздаётся, ждём 10 секунд...${NC}"
-    sleep 10
-else
-    sleep 5
-fi
+echo -e "${YELLOW}[INFO] Ожидание 30 секунд для инициализации PostgreSQL...${NC}"
+sleep 30
 
 # Выполнение скрипта настройки метаданных
 echo "[5/5] Настройка метаданных баз данных..."
@@ -139,17 +134,32 @@ else
     echo -e "${GREEN}[OK] Таблицы метаданных созданы${NC}"
 fi
 
-# Выполнение скрипта учебных баз (только если данные были удалены)
+# Спрашиваем про загрузку тестовых данных (только если данные были удалены)
 if [ "$REMOVE_DATA" = true ]; then
     echo ""
-    echo -e "${YELLOW}[INFO] Запуск генерации учебных баз данных (может занять 30-40 минут)...${NC}"
-    echo -e "${YELLOW}[INFO] Следите за логами PostgreSQL: docker logs -f sql_trainer_postgres${NC}"
+    echo "========================================"
+    echo "   ТЕСТОВЫЕ ДАННЫЕ"
+    echo "========================================"
     echo ""
-    docker exec -i sql_trainer_postgres psql -U postgres < ../scripts/db/setup_database.sql 2>/dev/null
-    if [ $? -ne 0 ]; then
-        echo -e "${YELLOW}[WARN] Не удалось выполнить setup_database.sql${NC}"
+    echo -e "${YELLOW}Тестовые базы данных содержат 1 млн студентов и 10 млн артефактов.${NC}"
+    echo -e "${YELLOW}Генерация может занять 30-40 минут и требует ~2 ГБ дискового пространства.${NC}"
+    echo ""
+    read -p "Загрузить тестовые учебные базы данных? (y/N): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo ""
+        echo -e "${YELLOW}[INFO] Запуск генерации тестовых учебных баз данных...${NC}"
+        echo -e "${YELLOW}[INFO] Это может занять 30-40 минут. Следите за логами: docker logs -f sql_trainer_postgres${NC}"
+        echo ""
+        docker exec -i sql_trainer_postgres psql -U postgres < ../scripts/db/setup_database.sql 2>/dev/null
+        if [ $? -ne 0 ]; then
+            echo -e "${YELLOW}[WARN] Не удалось выполнить setup_database.sql${NC}"
+        else
+            echo -e "${GREEN}[OK] Тестовые учебные базы данных созданы${NC}"
+        fi
     else
-        echo -e "${GREEN}[OK] Учебные базы данных созданы${NC}"
+        echo -e "${BLUE}[SKIP] Тестовые учебные базы данных НЕ загружены${NC}"
+        echo -e "${BLUE}[INFO] При необходимости вы сможете загрузить их позже через панель преподавателя${NC}"
     fi
 else
     echo -e "${BLUE}[SKIP] Учебные базы данных не пересозданы (данные сохранены)${NC}"

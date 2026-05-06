@@ -90,10 +90,8 @@ if not exist docker-compose.yml (
 REM Спрашиваем про удаление данных
 echo [2/5] Подготовка контейнеров...
 echo.
-echo ВНИМАНИЕ! Генерация учебных баз данных может занять 30-40 минут.
-echo.
 set REMOVE_DATA=N
-set /p REMOVE_DATA="Удалить ВСЕ данные БД и пересоздать учебные базы? (Y/N - по умолчанию N): "
+set /p REMOVE_DATA="Удалить ВСЕ данные БД и начать с чистого листа? (Y/N - по умолчанию N): "
 if /i "!REMOVE_DATA!"=="Y" (
     echo [INFO] Удаление данных БД...
     docker-compose down -v 2>nul
@@ -134,17 +132,33 @@ if !errorlevel! neq 0 (
     echo [OK] Таблицы метаданных созданы
 )
 
-REM Выполнение скрипта учебных баз (только если данные были удалены)
+REM Спрашиваем про загрузку тестовых данных
 if /i "!REMOVE_DATA!"=="Y" (
     echo.
-    echo [INFO] Запуск генерации учебных баз данных (может занять 30-40 минут)...
-    echo [INFO] Следите за логами PostgreSQL: docker logs -f sql_trainer_postgres
+    echo ========================================
+    echo    ТЕСТОВЫЕ ДАННЫЕ
+    echo ========================================
     echo.
-    docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_database.sql 2>nul
-    if !errorlevel! neq 0 (
-        echo [WARN] Не удалось выполнить setup_database.sql
+    echo Тестовые базы данных содержат 1 млн студентов и 10 млн артефактов.
+    echo Генерация может занять 30-40 минут и требует ~2 ГБ дискового пространства.
+    echo.
+    set LOAD_TEST_DATA=N
+    set /p LOAD_TEST_DATA="Загрузить тестовые учебные базы данных? (Y/N - по умолчанию N): "
+
+    if /i "!LOAD_TEST_DATA!"=="Y" (
+        echo.
+        echo [INFO] Запуск генерации тестовых учебных баз данных...
+        echo [INFO] Это может занять 30-40 минут. Следите за логами: docker logs -f sql_trainer_postgres
+        echo.
+        docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_database.sql 2>nul
+        if !errorlevel! neq 0 (
+            echo [WARN] Не удалось выполнить setup_database.sql
+        ) else (
+            echo [OK] Тестовые учебные базы данных созданы
+        )
     ) else (
-        echo [OK] Учебные базы данных созданы
+        echo [SKIP] Тестовые учебные базы данных НЕ загружены
+        echo [INFO] При необходимости вы сможете загрузить их позже через панель преподавателя
     )
 ) else (
     echo [SKIP] Учебные базы данных не пересозданы (данные сохранены)
