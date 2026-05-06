@@ -37,14 +37,14 @@
                     <h3 class="card-title">📁 Выберите базу данных</h3>
 
                     <div class="folder-selector" style="margin-bottom: 1rem;">
-                        <select id="folderSelector" class="db-select" onchange="changeFolder(this.value)">
-                            <option value="">Выберите папку...</option>
+                        <select id="folderSelector" class="db-select" onchange="changeFolder(this.value)" required>
+                            <option value="" disabled selected hidden>Выберите папку...</option>
                         </select>
                     </div>
 
                     <div class="db-selector">
-                        <select id="dbSelector" class="db-select" onchange="changeDatabase(this.value)" disabled>
-                            <option value="">Сначала выберите папку</option>
+                        <select id="dbSelector" class="db-select" onchange="changeDatabase(this.value)" disabled required>
+                            <option value="" disabled selected hidden>Сначала выберите папку</option>
                         </select>
                     </div>
 

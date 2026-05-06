@@ -1187,6 +1187,22 @@ li.CodeMirror-hint-active {
     color: var(--primary);
 }
 
+/* Стиль для плейсхолдера в select */
+select:invalid {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+select option {
+    color: #374151;
+    font-style: normal;
+}
+
+/* Убираем серый цвет у выбранных опций */
+select:valid {
+    color: #374151;
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
     .two-columns {

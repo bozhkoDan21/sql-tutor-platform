@@ -15,12 +15,13 @@ import java.io.IOException;
  * Проверяет наличие аутентифицированной сессии преподавателя.
  */
 @WebFilter({"/api/teacher/*"})  // Только API, JSP страницы не трогаем
+@SuppressWarnings("unused")  // Класс используется через аннотацию @WebFilter
 public class TeacherFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(TeacherFilter.class);
 
     @Override
-    public void init(FilterConfig filterConfig) throws ServletException {
+    public void init(FilterConfig filterConfig) {
         log.info("TeacherFilter initialized");
     }
 

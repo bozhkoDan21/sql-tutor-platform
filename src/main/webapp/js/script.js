@@ -55,7 +55,8 @@ function renderFolderSelector() {
     const folderSelect = document.getElementById('folderSelector');
     if (!folderSelect) return;
 
-    folderSelect.innerHTML = '<option value="">Выберите папку...</option>';
+    // Очищаем все опции, оставляем только плейсхолдер
+    folderSelect.innerHTML = '<option value="" disabled selected hidden>Выберите папку...</option>';
 
     for (const folder of foldersData) {
         const option = document.createElement('option');
@@ -63,6 +64,9 @@ function renderFolderSelector() {
         option.textContent = folder.name + ' (' + folder.databases.length + ' баз)';
         folderSelect.appendChild(option);
     }
+
+    // Сбрасываем валидацию
+    folderSelect.value = "";
 }
 
 /**
@@ -70,18 +74,31 @@ function renderFolderSelector() {
  */
 function changeFolder(folderId) {
     const dbSelect = document.getElementById('dbSelector');
-    if (!dbSelect) return;
+
+    // Если не выбрана папка (пустое значение)
+    if (!folderId || folderId === "") {
+        // Очищаем селектор баз, оставляем плейсхолдер
+        dbSelect.innerHTML = '<option value="" disabled selected hidden>Сначала выберите папку</option>';
+        dbSelect.disabled = true;
+        dbSelect.value = "";
+
+        // Очищаем остальной UI (как было раньше)
+        clearDatabaseInfo();
+        return;
+    }
 
     const folder = foldersData.find(f => f.id == folderId);
 
     if (!folder || folder.databases.length === 0) {
-        dbSelect.innerHTML = '<option value="">Нет доступных баз</option>';
+        dbSelect.innerHTML = '<option value="" disabled selected hidden>Нет доступных баз</option>';
         dbSelect.disabled = true;
+        dbSelect.value = "";
         return;
     }
 
+    // Заполняем список баз
     dbSelect.disabled = false;
-    dbSelect.innerHTML = '<option value="">Выберите базу данных...</option>';
+    dbSelect.innerHTML = '<option value="" disabled selected hidden>Выберите базу данных...</option>';
 
     for (const db of folder.databases) {
         const option = document.createElement('option');
@@ -91,6 +108,40 @@ function changeFolder(folderId) {
         option.dataset.schemaImageUrl = db.schemaImageUrl || '';
         dbSelect.appendChild(option);
     }
+
+    // Сбрасываем значение
+    dbSelect.value = "";
+}
+
+/**
+ * Очищает информацию о базе данных
+ */
+function clearDatabaseInfo() {
+    const dbInfoCard = document.getElementById('dbInfoCard');
+    const schemaImageContainer = document.getElementById('schemaImageContainer');
+    const currentDbBadge = document.getElementById('currentDbBadge');
+    const tablesList = document.getElementById('tablesList');
+    const tablesCountSpan = document.getElementById('tablesCount');
+    const resultContainer = document.getElementById('resultContainer');
+    const executionTimeSpan = document.getElementById('executionTime');
+    const rowCountSpan = document.getElementById('rowCount');
+    const treeView = document.getElementById('explainTreeView');
+    const textView = document.getElementById('explainTextView');
+
+    if (dbInfoCard) dbInfoCard.style.display = 'none';
+    if (schemaImageContainer) schemaImageContainer.style.display = 'none';
+    if (currentDbBadge) currentDbBadge.textContent = '';
+    if (tablesList) tablesList.innerHTML = '<div class="empty-state">Выберите базу данных</div>';
+    if (tablesCountSpan) tablesCountSpan.textContent = '0';
+    if (resultContainer) resultContainer.innerHTML = '<div class="empty-state">Выберите базу данных и выполните запрос</div>';
+    if (executionTimeSpan) executionTimeSpan.textContent = '';
+    if (rowCountSpan) rowCountSpan.textContent = '';
+    if (treeView) treeView.innerHTML = '-- Здесь появится вывод EXPLAIN ANALYZE';
+    if (textView) textView.textContent = '-- Здесь появится вывод EXPLAIN ANALYZE';
+
+    currentDbName = null;
+    currentTables = [];
+    currentTablesWithColumns = {};
 }
 
 /**
@@ -98,6 +149,14 @@ function changeFolder(folderId) {
  */
 function changeDatabase(dbName) {
     const dbSelect = document.getElementById('dbSelector');
+
+    // Если выбрана пустая опция (плейсхолдер)
+    if (!dbName || dbName === "") {
+        clearDatabaseInfo();
+        dbSelect.value = "";
+        return;
+    }
+
     const selectedOption = dbSelect.options[dbSelect.selectedIndex];
     const hasPassword = selectedOption && selectedOption.dataset.hasPassword === 'true';
     const schemaImageUrl = selectedOption ? selectedOption.dataset.schemaImageUrl : '';
