@@ -352,7 +352,9 @@ public class TeacherServlet extends HttpServlet {
 
         // Генерируем уникальное имя файла
         String fileName = System.currentTimeMillis() + "_" + dbName + "." + extension;
-        String uploadPath = getServletContext().getRealPath("/uploads/schemas/");
+
+        // Используем постоянный путь внутри контейнера (не временный)
+        String uploadPath = "/usr/local/tomcat/uploads/schemas/";
         java.io.File uploadDir = new java.io.File(uploadPath);
         if (!uploadDir.exists()) {
             uploadDir.mkdirs();
@@ -361,9 +363,31 @@ public class TeacherServlet extends HttpServlet {
         java.io.File destFile = new java.io.File(uploadDir, fileName);
         try {
             imagePart.write(destFile.getAbsolutePath());
+            log.info("Image saved to: {}", destFile.getAbsolutePath());
 
             // Сохраняем путь в БД
             String imageUrl = "/uploads/schemas/" + fileName;
+
+            // Проверяем, есть ли уже запись
+            String checkSql = "SELECT schema_image_url FROM databases_metadata WHERE db_name = ?";
+            try (PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
+                checkStmt.setString(1, dbName);
+                ResultSet rs = checkStmt.executeQuery();
+                if (rs.next()) {
+                    // Удаляем старый файл, если он существует
+                    String oldUrl = rs.getString("schema_image_url");
+                    if (oldUrl != null && !oldUrl.isEmpty()) {
+                        String oldFileName = oldUrl.substring(oldUrl.lastIndexOf('/') + 1);
+                        java.io.File oldFile = new java.io.File(uploadDir, oldFileName);
+                        if (oldFile.exists()) {
+                            oldFile.delete();
+                            log.info("Deleted old image: {}", oldFileName);
+                        }
+                    }
+                }
+            }
+
+            // Обновляем или вставляем путь
             String sql = "UPDATE databases_metadata SET schema_image_url = ? WHERE db_name = ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, imageUrl);

@@ -1203,6 +1203,104 @@ select:valid {
     color: #374151;
 }
 
+/* Сворачиваемая схема */
+.schema-collapsible {
+    margin-bottom: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.schema-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--light);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.schema-header:hover {
+    background: var(--primary-light);
+}
+
+.schema-title {
+    font-weight: 600;
+    color: var(--dark);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.schema-toggle {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    transition: transform 0.2s;
+}
+
+.schema-content {
+    padding: 1rem;
+    display: block;
+    border-top: 1px solid var(--border);
+}
+
+.schema-content.collapsed {
+    display: none;
+}
+
+.schema-image {
+    max-width: 100%;
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+/* Модальное окно для увеличения изображения */
+.image-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    cursor: pointer;
+}
+
+.image-modal-content {
+    margin: auto;
+    display: block;
+    max-width: 90%;
+    max-height: 90%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.image-modal-content img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
+.image-modal-close {
+    position: absolute;
+    top: 20px;
+    right: 35px;
+    color: #fff;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+    z-index: 1001;
+}
+
+.image-modal-close:hover {
+    color: #bbb;
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
     .two-columns {

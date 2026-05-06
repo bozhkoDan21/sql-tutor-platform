@@ -6,6 +6,28 @@
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 
+-- ============================================
+-- СОЗДАНИЕ РОЛЕЙ
+-- ============================================
+
+DO $$
+    BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'teacher_role') THEN
+            CREATE ROLE teacher_role WITH LOGIN PASSWORD 'teacher_pass' CREATEDB;
+            RAISE NOTICE 'Роль teacher_role создана';
+        ELSE
+            RAISE NOTICE 'Роль teacher_role уже существует';
+        END IF;
+
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'students') THEN
+            CREATE ROLE students WITH LOGIN PASSWORD 'student_pass';
+            RAISE NOTICE 'Роль students создана';
+        ELSE
+            RAISE NOTICE 'Роль students уже существует';
+        END IF;
+    END
+$$;
+
 -- Удаляем старые таблицы (если есть)
 DROP TABLE IF EXISTS active_sessions CASCADE;
 DROP TABLE IF EXISTS databases_metadata CASCADE;
@@ -16,11 +38,11 @@ DROP TABLE IF EXISTS database_folders CASCADE;
 -- ============================================
 
 CREATE TABLE database_folders (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    owner_id VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                  id SERIAL PRIMARY KEY,
+                                  name VARCHAR(255) NOT NULL,
+                                  owner_id VARCHAR(100) NOT NULL,
+                                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================
@@ -28,17 +50,17 @@ CREATE TABLE database_folders (
 -- ============================================
 
 CREATE TABLE databases_metadata (
-    db_name VARCHAR(63) PRIMARY KEY,
-    folder_id INTEGER NOT NULL REFERENCES database_folders(id) ON DELETE CASCADE,
-    display_name VARCHAR(255) NOT NULL,
-    access_password_hash VARCHAR(255),
-    is_visible BOOLEAN DEFAULT TRUE,
-    access_start DATE,
-    access_end DATE,
-    schema_image_url VARCHAR(500),
-    created_by VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                    db_name VARCHAR(63) PRIMARY KEY,
+                                    folder_id INTEGER NOT NULL REFERENCES database_folders(id) ON DELETE CASCADE,
+                                    display_name VARCHAR(255) NOT NULL,
+                                    access_password_hash VARCHAR(255),
+                                    is_visible BOOLEAN DEFAULT TRUE,
+                                    access_start DATE,
+                                    access_end DATE,
+                                    schema_image_url VARCHAR(500),
+                                    created_by VARCHAR(100) NOT NULL,
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================
@@ -46,14 +68,14 @@ CREATE TABLE databases_metadata (
 -- ============================================
 
 CREATE TABLE active_sessions (
-    session_id VARCHAR(255) PRIMARY KEY,
-    db_name VARCHAR(63) NOT NULL,
-    ip_address INET,
-    last_query TEXT,
-    last_query_time_ms BIGINT,
-    last_access TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_blocked BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                                 session_id VARCHAR(255) PRIMARY KEY,
+                                 db_name VARCHAR(63) NOT NULL,
+                                 ip_address INET,
+                                 last_query TEXT,
+                                 last_query_time_ms BIGINT,
+                                 last_access TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                 is_blocked BOOLEAN DEFAULT FALSE,
+                                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================
@@ -77,19 +99,19 @@ CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
-RETURN NEW;
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trigger_update_folder_updated_at
     BEFORE UPDATE ON database_folders
     FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trigger_update_metadata_updated_at
     BEFORE UPDATE ON databases_metadata
     FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
 -- ПРАВА ДОСТУПА ДЛЯ ПРЕПОДАВАТЕЛЯ
@@ -99,7 +121,7 @@ CREATE TRIGGER trigger_update_metadata_updated_at
 GRANT SELECT, INSERT, UPDATE, DELETE ON database_folders TO teacher_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON databases_metadata TO teacher_role;
 
--- Даём права на последовательности (для автоинкремента id)
+-- Даём права на последовательности (ПОСЛЕ создания таблиц)
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO teacher_role;
 
 -- ============================================
@@ -107,4 +129,4 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO teacher_role;
 -- ============================================
 
 SELECT '✅ Таблицы метаданных баз данных созданы' as message;
-SELECT '✅ Права для teacher_role настроены' as message;
+SELECT '✅ Роли и права для teacher_role настроены' as message;

@@ -75,15 +75,15 @@ function renderFolderSelector() {
 function changeFolder(folderId) {
     const dbSelect = document.getElementById('dbSelector');
 
-    // Если не выбрана папка (пустое значение)
+    // Если не выбрана папка
     if (!folderId || folderId === "") {
-        // Очищаем селектор баз, оставляем плейсхолдер
+        // Очищаем селектор баз
         dbSelect.innerHTML = '<option value="" disabled selected hidden>Сначала выберите папку</option>';
         dbSelect.disabled = true;
         dbSelect.value = "";
 
-        // Очищаем остальной UI (как было раньше)
-        clearDatabaseInfo();
+        // Очищаем всю информацию
+        clearAllDatabaseInfo();
         return;
     }
 
@@ -93,6 +93,9 @@ function changeFolder(folderId) {
         dbSelect.innerHTML = '<option value="" disabled selected hidden>Нет доступных баз</option>';
         dbSelect.disabled = true;
         dbSelect.value = "";
+
+        // Очищаем всю информацию
+        clearAllDatabaseInfo();
         return;
     }
 
@@ -111,37 +114,54 @@ function changeFolder(folderId) {
 
     // Сбрасываем значение
     dbSelect.value = "";
+
+    // Очищаем всю информацию при смене папки
+    clearAllDatabaseInfo();
 }
 
 /**
- * Очищает информацию о базе данных
+ * Полная очистка информации о базе данных
  */
-function clearDatabaseInfo() {
+function clearAllDatabaseInfo() {
+    // Скрываем карточку БД
     const dbInfoCard = document.getElementById('dbInfoCard');
-    const schemaImageContainer = document.getElementById('schemaImageContainer');
+    if (dbInfoCard) dbInfoCard.style.display = 'none';
+
+    // Скрываем и очищаем схему
+    hideSchemaImage();
+
+    // Очищаем бейдж
     const currentDbBadge = document.getElementById('currentDbBadge');
+    if (currentDbBadge) currentDbBadge.textContent = '';
+
+    // Очищаем список таблиц
     const tablesList = document.getElementById('tablesList');
     const tablesCountSpan = document.getElementById('tablesCount');
+    if (tablesList) tablesList.innerHTML = '<div class="empty-state">Выберите базу данных</div>';
+    if (tablesCountSpan) tablesCountSpan.textContent = '0';
+
+    // Очищаем результаты запроса
     const resultContainer = document.getElementById('resultContainer');
     const executionTimeSpan = document.getElementById('executionTime');
     const rowCountSpan = document.getElementById('rowCount');
-    const treeView = document.getElementById('explainTreeView');
-    const textView = document.getElementById('explainTextView');
-
-    if (dbInfoCard) dbInfoCard.style.display = 'none';
-    if (schemaImageContainer) schemaImageContainer.style.display = 'none';
-    if (currentDbBadge) currentDbBadge.textContent = '';
-    if (tablesList) tablesList.innerHTML = '<div class="empty-state">Выберите базу данных</div>';
-    if (tablesCountSpan) tablesCountSpan.textContent = '0';
     if (resultContainer) resultContainer.innerHTML = '<div class="empty-state">Выберите базу данных и выполните запрос</div>';
     if (executionTimeSpan) executionTimeSpan.textContent = '';
     if (rowCountSpan) rowCountSpan.textContent = '';
+
+    // Очищаем EXPLAIN
+    const treeView = document.getElementById('explainTreeView');
+    const textView = document.getElementById('explainTextView');
     if (treeView) treeView.innerHTML = '-- Здесь появится вывод EXPLAIN ANALYZE';
     if (textView) textView.textContent = '-- Здесь появится вывод EXPLAIN ANALYZE';
 
+    // Сбрасываем глобальные переменные
     currentDbName = null;
     currentTables = [];
     currentTablesWithColumns = {};
+
+    // Очищаем авторизацию пароля (если была)
+    const passwordModal = document.getElementById('passwordModal');
+    if (passwordModal) passwordModal.style.display = 'none';
 }
 
 /**
@@ -152,7 +172,7 @@ function changeDatabase(dbName) {
 
     // Если выбрана пустая опция (плейсхолдер)
     if (!dbName || dbName === "") {
-        clearDatabaseInfo();
+        clearAllDatabaseInfo();
         dbSelect.value = "";
         return;
     }
@@ -162,6 +182,11 @@ function changeDatabase(dbName) {
     const schemaImageUrl = selectedOption ? selectedOption.dataset.schemaImageUrl : '';
 
     if (hasPassword) {
+        // Сохраняем информацию для после ввода пароля
+        pendingDbName = dbName;
+        pendingSchemaImageUrl = schemaImageUrl;
+
+        // Показываем модальное окно
         const passwordModal = document.getElementById('passwordModal');
         const passwordInput = document.getElementById('dbPassword');
         const passwordError = document.getElementById('passwordError');
@@ -182,17 +207,26 @@ function changeDatabase(dbName) {
             verifyDatabasePassword(dbName, enteredPassword);
             return true;
         };
-
-        pendingDbName = dbName;
-        pendingSchemaImageUrl = schemaImageUrl;
         return;
     }
 
     // Без пароля - сразу загружаем
+    loadDatabaseAfterAuth(dbName, schemaImageUrl);
+}
+
+/**
+ * Загрузка базы данных после успешной аутентификации
+ */
+function loadDatabaseAfterAuth(dbName, schemaImageUrl) {
     loadDbInfo(dbName);
-    if (schemaImageUrl) {
+
+    // Показываем схему
+    if (schemaImageUrl && schemaImageUrl !== 'null' && schemaImageUrl !== '') {
         showSchemaImage(schemaImageUrl);
+    } else {
+        hideSchemaImage();
     }
+
     updateCurrentDbBadge(dbName);
 }
 
@@ -210,11 +244,13 @@ function verifyDatabasePassword(dbName, password) {
         if (data.success) {
             const passwordModal = document.getElementById('passwordModal');
             if (passwordModal) passwordModal.style.display = 'none';
-            loadDbInfo(dbName);
-            if (pendingSchemaImageUrl) {
-                showSchemaImage(pendingSchemaImageUrl);
-            }
-            updateCurrentDbBadge(dbName);
+
+            // Загружаем базу после успешного ввода пароля
+            loadDatabaseAfterAuth(dbName, pendingSchemaImageUrl);
+
+            // Очищаем pending переменные
+            pendingDbName = null;
+            pendingSchemaImageUrl = null;
         } else {
             const passwordError = document.getElementById('passwordError');
             if (passwordError) {
@@ -233,18 +269,37 @@ function verifyDatabasePassword(dbName, password) {
 }
 
 /**
- * Отображение схемы базы данных
+ * Открыть модальное окно с увеличенным изображением
  */
-function showSchemaImage(imageUrl) {
-    const container = document.getElementById('schemaImageContainer');
-    const img = document.getElementById('schemaImage');
-    if (container && img && imageUrl && imageUrl !== 'null' && imageUrl !== '') {
-        img.src = imageUrl;
-        container.style.display = 'block';
-    } else if (container) {
-        container.style.display = 'none';
+function openImageModal(imageUrl) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalImage');
+
+    if (modal && modalImg && imageUrl) {
+        modal.style.display = 'block';
+        modalImg.src = imageUrl;
     }
 }
+
+/**
+ * Закрыть модальное окно
+ */
+function closeImageModal() {
+    const modal = document.getElementById('imageModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Закрыть модальное окно по клавише Escape
+ */
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeImageModal();
+    }
+});
+
 
 /**
  * Обновляет бейдж с именем текущей базы
@@ -366,6 +421,80 @@ function insertTableName(tableName) {
 
         sqlEditor.replaceRange(insertText, cursor);
         sqlEditor.focus();
+    }
+}
+
+/**
+ * Инициализация сворачиваемой схемы
+ */
+function initCollapsibleSchema() {
+    const schemaContainer = document.getElementById('schemaContainer');
+    if (!schemaContainer) return;
+
+    const header = document.getElementById('schemaHeader');
+    if (header) {
+        header.addEventListener('click', function() {
+            const content = document.getElementById('schemaContent');
+            const toggle = document.getElementById('schemaToggle');
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                toggle.textContent = '▲';
+            } else {
+                content.classList.add('collapsed');
+                toggle.textContent = '▼';
+            }
+        });
+    }
+}
+
+/**
+ * Отображение схемы базы данных
+ */
+function showSchemaImage(imageUrl) {
+    const schemaContainer = document.getElementById('schemaContainer');
+    const schemaImg = document.getElementById('schemaImage');
+    const schemaContent = document.getElementById('schemaContent');
+    const schemaToggle = document.getElementById('schemaToggle');
+
+    if (!schemaContainer || !schemaImg) return;
+
+    if (imageUrl && imageUrl !== 'null' && imageUrl !== '') {
+        let fullUrl = imageUrl;
+        if (!imageUrl.startsWith('/')) {
+            fullUrl = '/' + imageUrl;
+        }
+
+        schemaImg.src = fullUrl;
+        schemaContainer.style.display = 'block';
+
+        // Добавляем обработчик клика для увеличения
+        schemaImg.onclick = function(e) {
+            e.stopPropagation();
+            openImageModal(fullUrl);
+        };
+
+        // Добавляем обработчик ошибки
+        schemaImg.onerror = function() {
+            console.error('Failed to load image:', fullUrl);
+            schemaContainer.style.display = 'none';
+        };
+
+        if (schemaContent) {
+            schemaContent.classList.remove('collapsed');
+            if (schemaToggle) schemaToggle.textContent = '▲';
+        }
+    } else {
+        schemaContainer.style.display = 'none';
+    }
+}
+
+/**
+ * Скрытие схемы
+ */
+function hideSchemaImage() {
+    const schemaContainer = document.getElementById('schemaContainer');
+    if (schemaContainer) {
+        schemaContainer.style.display = 'none';
     }
 }
 
@@ -824,6 +953,9 @@ function initPage() {
 
     // Инициализация кнопок
     initButtons();
+
+    // Инициализация сворачиваемой схемы
+    initCollapsibleSchema();
 
     // Инициализация переключения EXPLAIN
     initExplainToggle();

@@ -61,8 +61,21 @@
                             <span class="db-name" id="dbName"></span>
                         </div>
 
-                        <div id="schemaImageContainer" style="display: none; margin-bottom: 1rem; text-align: center;">
-                            <img id="schemaImage" src="" alt="Схема базы данных" style="max-width: 100%; border-radius: var(--radius); cursor: pointer;">
+                        <!-- Сворачиваемая схема базы данных -->
+                        <div id="schemaContainer" class="schema-collapsible" style="display: none;">
+                            <div class="schema-header" id="schemaHeader">
+                                <div class="schema-title">
+                                    <span>📊</span>
+                                    <span>Схема базы данных</span>
+                                </div>
+                                <div class="schema-toggle" id="schemaToggle">▲</div>
+                            </div>
+                            <div class="schema-content" id="schemaContent">
+                                <img id="schemaImage" class="schema-image" src="" alt="Схема базы данных">
+                                <div style="font-size: 0.75rem; color: var(--text-light); margin-top: 0.5rem; text-align: center;">
+                                    ⚡ Нажмите на изображение для увеличения
+                                </div>
+                            </div>
                         </div>
 
                         <div class="db-tables-section">
@@ -159,6 +172,14 @@
             </div>
         </div>
     </main>
+
+    <!-- Модальное окно для увеличения схемы -->
+    <div id="imageModal" class="image-modal" onclick="closeImageModal()">
+        <span class="image-modal-close" onclick="closeImageModal()">&times;</span>
+        <div class="image-modal-content">
+            <img id="modalImage" src="" alt="Увеличенная схема">
+        </div>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>

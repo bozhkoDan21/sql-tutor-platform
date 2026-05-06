@@ -51,8 +51,12 @@ services:
       TZ: Europe/Moscow
     ports:
       - "8081:8080"
+    volumes:
+      - uploads_data:/usr/local/tomcat/uploads
     restart: unless-stopped
 
 volumes:
   postgres_data:
     name: sql_trainer_postgres_data
+  uploads_data:
+    name: sql_trainer_uploads
