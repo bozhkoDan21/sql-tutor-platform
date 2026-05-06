@@ -17,18 +17,12 @@ public final class Constants {
     /** Максимальная длина SQL запроса в символах */
     public static final int MAX_QUERY_LENGTH = 10000;
 
-    /** Минимальный интервал между запросами от одного пользователя (мс) */
-    public static final long MIN_REQUEST_INTERVAL_MS = 1000;
-
     // ============================================
     // УПРАВЛЕНИЕ СЕССИЯМИ
     // ============================================
 
     /** Время жизни сессии студента (мс) - 30 минут */
     public static final long SESSION_TTL_MS = 30 * 60 * 1000;
-
-    /** Время жизни записи rate limiting (мс) - 1 минута */
-    public static final long RATE_LIMIT_TTL_MS = 60 * 1000;
 
     // ============================================
     // РАЗМЕРЫ И ЛИМИТЫ
@@ -42,12 +36,6 @@ public final class Constants {
 
     /** Максимальный размер запроса (15MB) */
     public static final int MAX_REQUEST_SIZE_BYTES = 15 * 1024 * 1024;
-
-    /** Максимальное количество студентов за одну генерацию */
-    public static final int MAX_STUDENTS_PER_GENERATION = 100;
-
-    /** Длина генерируемого пароля */
-    public static final int GENERATED_PASSWORD_LENGTH = 10;
 
     /** Максимальная длина имени базы данных */
     public static final int MAX_DB_NAME_LENGTH = 63;
@@ -69,37 +57,15 @@ public final class Constants {
     // БАЗЫ ДАННЫХ
     // ============================================
 
-    /** Защищённые базы данных (нельзя удалить) */
+    /** Защищённые базы данных (нельзя удалить) - только системные PostgreSQL */
     public static final String[] PROTECTED_DATABASES = {
             "postgres",
             "template0",
             "template1"
     };
 
-    /** Разрешённые для студентов базы данных */
-    public static final String[] ALLOWED_STUDENT_DATABASES = {
-            "sql_tutor_university_db",
-            "archaeology_10m"
-    };
-
     /** Разрешённые расширения файлов для загрузки SQL */
     public static final String[] ALLOWED_SQL_EXTENSIONS = {"sql"};
-
-    // ============================================
-    // ПАРОЛИ
-    // ============================================
-
-    /** Набор символов для генерации паролей (заглавные) */
-    public static final String PASSWORD_UPPERCASE = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-
-    /** Набор символов для генерации паролей (строчные) */
-    public static final String PASSWORD_LOWERCASE = "abcdefghijkmnpqrstuvwxyz";
-
-    /** Набор символов для генерации паролей (цифры) */
-    public static final String PASSWORD_DIGITS = "23456789";
-
-    /** Набор символов для генерации паролей (спецсимволы) */
-    public static final String PASSWORD_SPECIAL = "!@#$%^&*";
 
     // ============================================
     // ОПАСНЫЕ SQL ПАТТЕРНЫ

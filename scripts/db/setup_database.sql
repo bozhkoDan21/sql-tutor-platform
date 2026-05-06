@@ -842,6 +842,22 @@ ALTER ROLE students SET idle_in_transaction_session_timeout = '5min';
 ALTER ROLE students CONNECTION LIMIT 20;
 
 -- ============================================
+-- ПРАВА ДЛЯ ПРЕПОДАВАТЕЛЯ
+-- ============================================
+
+\c sql_tutor_university_db;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO teacher_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO teacher_role;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO teacher_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO teacher_role;
+
+\c archaeology_10m;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO teacher_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO teacher_role;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO teacher_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO teacher_role;
+
+-- ============================================
 -- ПРОВЕРКА РЕЗУЛЬТАТА
 -- ============================================
 

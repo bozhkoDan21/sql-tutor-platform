@@ -13,13 +13,13 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Arrays;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -42,20 +42,8 @@ public class StudentServlet extends HttpServlet {
     // Активные сессии студентов для мониторинга преподавателем
     private static final ConcurrentHashMap<String, SessionInfo> activeSessions = new ConcurrentHashMap<>();
 
-    // Ограничение частоты запросов для защиты от DoS
-    private static final ConcurrentHashMap<Long, Long> lastRequestTime = new ConcurrentHashMap<>();
-
-    // Статистика запросов
-    private static int queryCounter = 0;
-    private static long lastLogTime = System.currentTimeMillis();
-
     // Планировщик для очистки заблокированных сессий
     private static final ScheduledExecutorService cleanupScheduler = Executors.newSingleThreadScheduledExecutor();
-
-    // Список баз данных, доступных студентам
-    private static final Set<String> ALLOWED_DATABASES = new HashSet<>(Arrays.asList(
-            Constants.ALLOWED_STUDENT_DATABASES
-    ));
 
     static {
         // Запускаем очистку заблокированных сессий каждую минуту
@@ -84,39 +72,95 @@ public class StudentServlet extends HttpServlet {
     }
 
     /**
-     * Информация о сессии студента для преподавателя.
+     * Информация о сессии для преподавателя.
      */
     public static class SessionInfo {
         private final String sessionId;
-        private final String login;
+        private final String ipAddress;
         private final String lastQuery;
         private final Date lastAccess;
         private final String dbName;
         private final long lastQueryTimeMs;
         private boolean blocked;
+        private final boolean isTeacher;
 
-        public SessionInfo(String sessionId, String login, String dbName, String lastQuery, long lastQueryTimeMs) {
+        public SessionInfo(String sessionId, String ipAddress, String dbName, String lastQuery, long lastQueryTimeMs, boolean isTeacher) {
             this.sessionId = sessionId;
-            this.login = login;
+            this.ipAddress = ipAddress;
             this.dbName = dbName;
             this.lastQuery = lastQuery;
             this.lastAccess = new Date();
             this.lastQueryTimeMs = lastQueryTimeMs;
             this.blocked = false;
+            this.isTeacher = isTeacher;
         }
 
         public String getSessionId() { return sessionId; }
-        public String getLogin() { return login; }
+        public String getIpAddress() { return ipAddress; }
         public String getDbName() { return dbName; }
         public String getLastQuery() { return lastQuery; }
         public Date getLastAccess() { return lastAccess; }
         public long getLastQueryTimeMs() { return lastQueryTimeMs; }
         public boolean isBlocked() { return blocked; }
         public void setBlocked(boolean blocked) { this.blocked = blocked; }
+        public boolean isTeacher() { return isTeacher; }
     }
 
     public static ConcurrentHashMap<String, SessionInfo> getActiveSessions() {
         return new ConcurrentHashMap<>(activeSessions);
+    }
+
+    /**
+     * Получает IP-адрес клиента.
+     */
+    private String getClientIp(HttpServletRequest req) {
+        String ip = req.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = req.getHeader("Proxy-Client-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = req.getHeader("WL-Proxy-Client-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = req.getRemoteAddr();
+        }
+        // Если localhost, получаем реальный IP
+        if ("127.0.0.1".equals(ip) || "0:0:0:0:0:0:0:1".equals(ip)) {
+            try {
+                ip = InetAddress.getLocalHost().getHostAddress();
+            } catch (UnknownHostException e) {
+                ip = "127.0.0.1";
+            }
+        }
+        return ip;
+    }
+
+    /**
+     * Проверяет, авторизован ли пользователь для доступа к защищённой паролем базе.
+     */
+    private boolean isAuthorizedForDatabase(HttpServletRequest req, String dbName) {
+        HttpSession session = req.getSession(false);
+        if (session == null) return false;
+        @SuppressWarnings("unchecked")
+        Set<String> authorizedDbs = (Set<String>) session.getAttribute("authorizedDatabases");
+        return authorizedDbs != null && authorizedDbs.contains(dbName);
+    }
+
+    /**
+     * Проверяет, защищена ли база данных паролем.
+     */
+    private boolean isDatabasePasswordProtected(String dbName) {
+        try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.ADMIN, null)) {
+            String sql = "SELECT access_password_hash FROM databases_metadata WHERE db_name = ? AND access_password_hash IS NOT NULL";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, dbName);
+                ResultSet rs = stmt.executeQuery();
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            log.warn("Failed to check if database is password protected: {}", e.getMessage());
+            return false;
+        }
     }
 
     @Override
@@ -144,64 +188,57 @@ public class StudentServlet extends HttpServlet {
             return;
         }
 
-        Long userId = (Long) req.getAttribute("userId");
-        if (userId == null) {
-            resp.getWriter().write("{\"error\":\"User not authenticated\"}");
-            return;
-        }
-
-        String role = (String) req.getAttribute("role");
         HttpSession session = req.getSession(true);
         String sessionId = session.getId();
-        String login = (String) req.getAttribute("login");
+        String ipAddress = getClientIp(req);
+
+        // Проверка, авторизован ли пользователь как преподаватель
+        boolean isTeacher = false;
+        HttpSession teacherSession = req.getSession(false);
+        if (teacherSession != null && teacherSession.getAttribute("authenticated") != null) {
+            Boolean auth = (Boolean) teacherSession.getAttribute("authenticated");
+            isTeacher = auth != null && auth;
+        }
 
         // Проверка, не заблокирована ли текущая сессия (только для студентов)
-        if (!"teacher".equals(role)) {
+        if (!isTeacher) {
             SessionInfo existing = activeSessions.get(sessionId);
             if (existing != null && existing.isBlocked()) {
-                log.warn("Blocked session {} attempted to execute query for user {}", sessionId, login);
+                log.warn("Blocked session {} attempted to execute query from IP {}", sessionId, ipAddress);
                 resp.getWriter().write("{\"error\":\"Your session has been terminated by teacher. Please re-login.\"}");
                 return;
             }
         }
 
         // Проверка прав доступа к базе данных
-        if (!isDatabaseAccessible(dbName, userId, role)) {
-            log.warn("User {} attempted to access unauthorized database: {}", userId, dbName);
+        if (!isDatabaseAccessible(dbName, isTeacher)) {
+            log.warn("User from IP {} attempted to access unauthorized database: {}", ipAddress, dbName);
             resp.getWriter().write("{\"error\":\"Access denied to database: " + dbName + "\"}");
             return;
         }
 
+        // Для студентов: дополнительная проверка пароля
+        if (!isTeacher && isDatabasePasswordProtected(dbName) && !isAuthorizedForDatabase(req, dbName)) {
+            log.warn("User from IP {} attempted to access password-protected database without auth: {}", ipAddress, dbName);
+            resp.getWriter().write("{\"error\":\"Password required for database: " + dbName + "\"}");
+            return;
+        }
+
         // Для студентов: проверка, что запрос начинается с SELECT
-        if (!"teacher".equals(role) && !query.trim().toLowerCase().startsWith("select")) {
-            log.warn("Student {} attempted to execute non-SELECT query: {}", userId, query);
+        if (!isTeacher && !query.trim().toLowerCase().startsWith("select")) {
+            log.warn("Student from IP {} attempted to execute non-SELECT query: {}", ipAddress, query);
             resp.getWriter().write("{\"error\":\"Only SELECT queries are allowed for students\"}");
             return;
         }
 
-        // Rate limiting (только для студентов)
-        if (!"teacher".equals(role)) {
-            Long lastRequest = lastRequestTime.get(userId);
-            if (lastRequest != null && System.currentTimeMillis() - lastRequest < MIN_REQUEST_INTERVAL_MS) {
-                log.warn("Rate limit exceeded for user {}", userId);
-                resp.getWriter().write("{\"error\":\"Too many requests. Please wait before sending another query.\"}");
-                return;
-            }
-            lastRequestTime.put(userId, System.currentTimeMillis());
-
-            if (lastRequestTime.size() > 1000) {
-                cleanOldRateLimits();
-            }
-        }
-
-        if (log.isDebugEnabled()) {
-            log.debug("Executing query on {} from user {} (role: {}): {}", dbName, userId, role,
-                    query.length() > 100 ? query.substring(0, 100) + "..." : query);
+        // Для преподавателя: логируем, что выполняется запрос с полными правами
+        if (isTeacher) {
+            log.info("Teacher executing query on {}: {}", dbName, query.length() > 200 ? query.substring(0, 200) + "..." : query);
         }
 
         // Выполнение запроса в зависимости от роли
         QueryExecutor.QueryResult result;
-        if ("teacher".equals(role)) {
+        if (isTeacher) {
             result = QueryExecutor.executeAsTeacher(dbName, query, needExplain);
         } else {
             result = QueryExecutor.executeAsStudent(dbName, query, needExplain);
@@ -209,45 +246,44 @@ public class StudentServlet extends HttpServlet {
 
         long executionTime = result.getExecutionTimeMs();
 
-        // Обновляем сессию после выполнения запроса (только для студентов)
-        if (!"teacher".equals(role)) {
-            activeSessions.put(sessionId, new SessionInfo(sessionId, login, dbName, query, executionTime));
-            cleanOldSessions();
-        }
+        // Обновляем сессию после выполнения запроса
+        activeSessions.put(sessionId, new SessionInfo(sessionId, ipAddress, dbName, query, executionTime, isTeacher));
+        cleanOldSessions();
 
         resp.getWriter().write(gson.toJson(result));
-
-        queryCounter++;
-        if (queryCounter >= 100 || System.currentTimeMillis() - lastLogTime > 60000) {
-            log.info("Processed {} queries in last period. Active sessions: {}, Rate limit entries: {}",
-                    queryCounter, activeSessions.size(), lastRequestTime.size());
-            queryCounter = 0;
-            lastLogTime = System.currentTimeMillis();
-        }
     }
 
     /**
      * Проверяет, имеет ли пользователь доступ к указанной базе данных.
      * Преподаватели имеют доступ ко всем базам.
-     * Студенты - только к разрешённым или через права PostgreSQL.
+     * Студенты - только к базам, которые есть в metadata с is_visible = true
+     * и соответствующие периоду доступа.
      */
-    private boolean isDatabaseAccessible(String dbName, Long userId, String role) {
-        if ("teacher".equals(role)) {
+    private boolean isDatabaseAccessible(String dbName, boolean isTeacher) {
+        if (isTeacher) {
             return true;
         }
 
-        if (ALLOWED_DATABASES.contains(dbName)) {
-            return true;
-        }
-
+        // Проверяем в таблице databases_metadata
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.ADMIN, null)) {
-            String sql = "SELECT has_database_privilege($1, $2, 'CONNECT')";
+            String sql = "SELECT is_visible, access_start, access_end FROM databases_metadata WHERE db_name = ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, "students");
-                stmt.setString(2, dbName);
+                stmt.setString(1, dbName);
                 ResultSet rs = stmt.executeQuery();
-                if (rs.next() && rs.getBoolean(1)) {
-                    log.debug("User {} granted access to database {} via PostgreSQL privileges", userId, dbName);
+                if (rs.next()) {
+                    if (!rs.getBoolean("is_visible")) {
+                        return false;
+                    }
+                    // Проверка периода доступа
+                    Date accessStart = rs.getDate("access_start");
+                    Date accessEnd = rs.getDate("access_end");
+                    Date now = new Date();
+                    if (accessStart != null && now.before(accessStart)) {
+                        return false;
+                    }
+                    if (accessEnd != null && now.after(accessEnd)) {
+                        return false;
+                    }
                     return true;
                 }
             }
@@ -265,13 +301,5 @@ public class StudentServlet extends HttpServlet {
         long cutoff = System.currentTimeMillis() - Constants.SESSION_TTL_MS;
         activeSessions.entrySet().removeIf(entry ->
                 entry.getValue().lastAccess.getTime() < cutoff);
-    }
-
-    /**
-     * Удаляет записи rate limiting старше 1 минуты.
-     */
-    private void cleanOldRateLimits() {
-        long cutoff = System.currentTimeMillis() - Constants.RATE_LIMIT_TTL_MS;
-        lastRequestTime.entrySet().removeIf(entry -> entry.getValue() < cutoff);
     }
 }

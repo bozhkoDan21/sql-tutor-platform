@@ -3,6 +3,11 @@ let currentDbRequest = null;
 let currentDbName = null;
 let currentTables = [];
 let currentTablesWithColumns = {};
+let foldersData = [];
+let currentPasswordCallback = null;
+let pendingDbName = null;
+let pendingSchemaImageUrl = null;
+
 let sqlKeywords = [
     'SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'OUTER JOIN',
     'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'OFFSET', 'AND', 'OR', 'NOT',
@@ -11,20 +16,8 @@ let sqlKeywords = [
 ];
 
 /**
- * Получает токен из localStorage
+ * Экранирует HTML-символы для предотвращения XSS-атак
  */
-function getAuthToken() {
-    return localStorage.getItem('accessToken');
-}
-
-/**
- * Возвращает заголовки с авторизацией
- */
-function getAuthHeaders() {
-    const token = getAuthToken();
-    return token ? { 'Authorization': 'Bearer ' + token } : {};
-}
-
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -32,674 +25,190 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    const executeBtn = document.getElementById('executeBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const formatBtn = document.getElementById('formatBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const resultContainer = document.getElementById('resultContainer');
-    const executionTime = document.getElementById('executionTime');
-    const rowCount = document.getElementById('rowCount');
-    const dbSelector = document.getElementById('dbSelector');
-
-    // Инициализация CodeMirror
-    const textarea = document.getElementById('sqlQuery');
-    if (textarea) {
-        sqlEditor = CodeMirror.fromTextArea(textarea, {
-            mode: 'text/x-sql',
-            theme: 'dracula',
-            lineNumbers: true,
-            lineWrapping: true,
-            matchBrackets: true,
-            autoCloseBrackets: true,
-            indentUnit: 4,
-            tabSize: 4,
-            extraKeys: {
-                'Ctrl-Space': 'autocomplete',
-                'Ctrl-Enter': function(cm) {
-                    executeQuery();
-                },
-                'Ctrl-Shift-F': function(cm) {
-                    formatQueryAndSet();
-                }
+/**
+ * Загружает список папок и баз данных
+ */
+function loadDatabasesList() {
+    fetch('/api/databases')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.folders) {
+                foldersData = data.folders;
+                renderFolderSelector();
+            } else {
+                console.error('Failed to load databases:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading databases:', error);
+            const folderSelect = document.getElementById('folderSelector');
+            if (folderSelect) {
+                folderSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
             }
         });
+}
 
-        sqlEditor.setOption('hintOptions', {
-            hint: customSqlHint,
-            completeSingle: false,
-            alignWithWord: false
-        });
+/**
+ * Отображает селектор папок
+ */
+function renderFolderSelector() {
+    const folderSelect = document.getElementById('folderSelector');
+    if (!folderSelect) return;
+
+    folderSelect.innerHTML = '<option value="">Выберите папку...</option>';
+
+    for (const folder of foldersData) {
+        const option = document.createElement('option');
+        option.value = folder.id;
+        option.textContent = folder.name + ' (' + folder.databases.length + ' баз)';
+        folderSelect.appendChild(option);
+    }
+}
+
+/**
+ * Смена выбранной папки
+ */
+function changeFolder(folderId) {
+    const dbSelect = document.getElementById('dbSelector');
+    if (!dbSelect) return;
+
+    const folder = foldersData.find(f => f.id == folderId);
+
+    if (!folder || folder.databases.length === 0) {
+        dbSelect.innerHTML = '<option value="">Нет доступных баз</option>';
+        dbSelect.disabled = true;
+        return;
     }
 
-    if (executeBtn) {
-        executeBtn.addEventListener('click', function() {
-            executeQuery();
-        });
+    dbSelect.disabled = false;
+    dbSelect.innerHTML = '<option value="">Выберите базу данных...</option>';
+
+    for (const db of folder.databases) {
+        const option = document.createElement('option');
+        option.value = db.dbName;
+        option.textContent = db.displayName + (db.hasPassword ? ' 🔒' : '');
+        option.dataset.hasPassword = db.hasPassword;
+        option.dataset.schemaImageUrl = db.schemaImageUrl || '';
+        dbSelect.appendChild(option);
+    }
+}
+
+/**
+ * Смена базы данных
+ */
+function changeDatabase(dbName) {
+    const dbSelect = document.getElementById('dbSelector');
+    const selectedOption = dbSelect.options[dbSelect.selectedIndex];
+    const hasPassword = selectedOption && selectedOption.dataset.hasPassword === 'true';
+    const schemaImageUrl = selectedOption ? selectedOption.dataset.schemaImageUrl : '';
+
+    if (hasPassword) {
+        const passwordModal = document.getElementById('passwordModal');
+        const passwordInput = document.getElementById('dbPassword');
+        const passwordError = document.getElementById('passwordError');
+
+        if (passwordError) passwordError.style.display = 'none';
+        if (passwordInput) passwordInput.value = '';
+        if (passwordModal) passwordModal.style.display = 'block';
+
+        currentPasswordCallback = () => {
+            const enteredPassword = passwordInput ? passwordInput.value.trim() : '';
+            if (!enteredPassword) {
+                if (passwordError) {
+                    passwordError.textContent = 'Введите пароль';
+                    passwordError.style.display = 'block';
+                }
+                return false;
+            }
+            verifyDatabasePassword(dbName, enteredPassword);
+            return true;
+        };
+
+        pendingDbName = dbName;
+        pendingSchemaImageUrl = schemaImageUrl;
+        return;
     }
 
-    if (clearBtn) {
-        clearBtn.addEventListener('click', function() {
-            clearResult();
-        });
+    // Без пароля - сразу загружаем
+    loadDbInfo(dbName);
+    if (schemaImageUrl) {
+        showSchemaImage(schemaImageUrl);
     }
+    updateCurrentDbBadge(dbName);
+}
 
-    if (formatBtn) {
-        formatBtn.addEventListener('click', function() {
-            formatQueryAndSet();
-        });
-    }
-
-    if (downloadBtn) {
-        downloadBtn.addEventListener('click', function() {
-            downloadCSV();
-        });
-    }
-
-    // Делегирование событий для переключения вида EXPLAIN
-    document.addEventListener('click', function(e) {
-        const btn = e.target.closest('.explain-view-btn');
-        if (!btn) return;
-
-        const view = btn.getAttribute('data-view');
-        const treeView = document.getElementById('explainTreeView');
-        const textView = document.getElementById('explainTextView');
-
-        if (!treeView || !textView) return;
-
-        // Обновляем активную кнопку
-        document.querySelectorAll('.explain-view-btn').forEach(b => {
-            b.classList.remove('active');
-        });
-        btn.classList.add('active');
-
-        // Показываем нужное представление
-        if (view === 'tree') {
-            treeView.style.display = 'block';
-            textView.style.display = 'none';
-        } else if (view === 'text') {
-            treeView.style.display = 'none';
-            textView.style.display = 'block';
+/**
+ * Проверка пароля базы данных
+ */
+function verifyDatabasePassword(dbName, password) {
+    fetch('/api/database/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dbName: dbName, password: password })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const passwordModal = document.getElementById('passwordModal');
+            if (passwordModal) passwordModal.style.display = 'none';
+            loadDbInfo(dbName);
+            if (pendingSchemaImageUrl) {
+                showSchemaImage(pendingSchemaImageUrl);
+            }
+            updateCurrentDbBadge(dbName);
+        } else {
+            const passwordError = document.getElementById('passwordError');
+            if (passwordError) {
+                passwordError.textContent = data.error || 'Неверный пароль';
+                passwordError.style.display = 'block';
+            }
+        }
+    })
+    .catch(() => {
+        const passwordError = document.getElementById('passwordError');
+        if (passwordError) {
+            passwordError.textContent = 'Ошибка проверки пароля';
+            passwordError.style.display = 'block';
         }
     });
+}
 
-    loadDatabases();
-
-    function formatQueryAndSet() {
-        if (sqlEditor) {
-            const currentQuery = sqlEditor.getValue();
-            const formatted = formatQuery(currentQuery);
-            if (formatted !== currentQuery) {
-                sqlEditor.setValue(formatted);
-                sqlEditor.focus();
-            }
-        }
+/**
+ * Отображение схемы базы данных
+ */
+function showSchemaImage(imageUrl) {
+    const container = document.getElementById('schemaImageContainer');
+    const img = document.getElementById('schemaImage');
+    if (container && img && imageUrl && imageUrl !== 'null' && imageUrl !== '') {
+        img.src = imageUrl;
+        container.style.display = 'block';
+    } else if (container) {
+        container.style.display = 'none';
     }
+}
 
-    function customSqlHint(cm) {
-        const cursor = cm.getCursor();
-        const token = cm.getTokenAt(cursor);
-        const line = cm.getLine(cursor.line);
-        const textBeforeCursor = line.substring(0, cursor.ch);
-
-        let hints = [];
-        let from = { line: cursor.line, ch: token.start };
-        let to = { line: cursor.line, ch: token.end };
-
-        const afterFromMatch = textBeforeCursor.match(/FROM\s+$/i);
-        const afterJoinMatch = textBeforeCursor.match(/JOIN\s+$/i);
-        const afterSelectMatch = textBeforeCursor.match(/SELECT\s+$/i);
-        const afterWhereMatch = textBeforeCursor.match(/WHERE\s+$/i);
-        const afterTableDot = textBeforeCursor.match(/(\w+)\.$/i);
-
-        if (afterFromMatch || afterJoinMatch) {
-            hints = currentTables;
-        } else if (afterSelectMatch) {
-            const allColumns = [];
-            for (const table in currentTablesWithColumns) {
-                if (currentTablesWithColumns[table]) {
-                    currentTablesWithColumns[table].forEach(col => {
-                        allColumns.push(`${table}.${col}`);
-                        allColumns.push(col);
-                    });
-                }
-            }
-            hints = [...new Set([...allColumns, ...sqlKeywords])];
-        } else if (afterWhereMatch) {
-            const allColumns = [];
-            for (const table in currentTablesWithColumns) {
-                if (currentTablesWithColumns[table]) {
-                    currentTablesWithColumns[table].forEach(col => {
-                        allColumns.push(`${table}.${col}`);
-                        allColumns.push(col);
-                    });
-                }
-            }
-            hints = [...new Set([...allColumns, ...sqlKeywords])];
-        } else if (afterTableDot) {
-            const tableName = afterTableDot[1];
-            if (currentTablesWithColumns[tableName]) {
-                hints = currentTablesWithColumns[tableName];
-            } else {
-                hints = sqlKeywords;
-            }
-        } else {
-            hints = [...sqlKeywords, ...currentTables];
-        }
-
-        const currentWord = token.string;
-        if (currentWord) {
-            hints = hints.filter(h => h.toLowerCase().startsWith(currentWord.toLowerCase()));
-        }
-
-        return {
-            list: hints,
-            from: from,
-            to: to
-        };
+/**
+ * Обновляет бейдж с именем текущей базы
+ */
+function updateCurrentDbBadge(dbName) {
+    const badge = document.getElementById('currentDbBadge');
+    if (badge) {
+        badge.textContent = dbName;
+        badge.title = dbName;
     }
-
-    function formatQuery(query) {
-        if (!query) return '';
-
-        let formatted = query;
-
-        formatted = formatted.replace(/\bselect\b/gi, 'SELECT');
-        formatted = formatted.replace(/\bfrom\b/gi, 'FROM');
-        formatted = formatted.replace(/\bwhere\b/gi, 'WHERE');
-        formatted = formatted.replace(/\bjoin\b/gi, 'JOIN');
-        formatted = formatted.replace(/\bleft join\b/gi, 'LEFT JOIN');
-        formatted = formatted.replace(/\bright join\b/gi, 'RIGHT JOIN');
-        formatted = formatted.replace(/\binner join\b/gi, 'INNER JOIN');
-        formatted = formatted.replace(/\bgroup by\b/gi, 'GROUP BY');
-        formatted = formatted.replace(/\border by\b/gi, 'ORDER BY');
-        formatted = formatted.replace(/\bhaving\b/gi, 'HAVING');
-        formatted = formatted.replace(/\blimit\b/gi, 'LIMIT');
-        formatted = formatted.replace(/\boffset\b/gi, 'OFFSET');
-        formatted = formatted.replace(/\band\b/gi, 'AND');
-        formatted = formatted.replace(/\bor\b/gi, 'OR');
-        formatted = formatted.replace(/\bnot\b/gi, 'NOT');
-        formatted = formatted.replace(/\bin\b/gi, 'IN');
-        formatted = formatted.replace(/\bexists\b/gi, 'EXISTS');
-        formatted = formatted.replace(/\bbetween\b/gi, 'BETWEEN');
-        formatted = formatted.replace(/\blike\b/gi, 'LIKE');
-        formatted = formatted.replace(/\bis null\b/gi, 'IS NULL');
-        formatted = formatted.replace(/\bis not null\b/gi, 'IS NOT NULL');
-        formatted = formatted.replace(/\bas\b/gi, 'AS');
-        formatted = formatted.replace(/\bon\b/gi, 'ON');
-
-        formatted = formatted.replace(/SELECT\*/gi, 'SELECT *');
-        formatted = formatted.replace(/,([^\s])/g, ', $1');
-        formatted = formatted.replace(/\s+/g, ' ');
-        formatted = formatted.replace(/FROM/g, '\nFROM');
-        formatted = formatted.replace(/WHERE/g, '\nWHERE');
-        formatted = formatted.replace(/JOIN/g, '\nJOIN');
-        formatted = formatted.replace(/LEFT JOIN/g, '\nLEFT JOIN');
-        formatted = formatted.replace(/RIGHT JOIN/g, '\nRIGHT JOIN');
-        formatted = formatted.replace(/GROUP BY/g, '\nGROUP BY');
-        formatted = formatted.replace(/ORDER BY/g, '\nORDER BY');
-
-        return formatted.trim();
+    const dbInfoCard = document.getElementById('dbInfoCard');
+    if (dbInfoCard) {
+        dbInfoCard.style.display = 'block';
     }
-
-    function getErrorHint(query, errorMessage) {
-        const lowerError = errorMessage.toLowerCase();
-        const suggestions = [];
-
-        if (lowerError.includes('syntax error')) {
-            if (query.match(/SELECT\s+\w+\s+FROM/i) && !query.match(/SELECT\s+\w+,\s+\w+\s+FROM/i)) {
-                suggestions.push('💡 Возможно, пропущена запятая между колонками. Пример: SELECT id, name FROM table');
-            }
-            if (query.match(/FROM\s+FROM/i)) {
-                suggestions.push('💡 Обнаружено два FROM. Удалите лишний.');
-            }
-            if (query.match(/WHERE\s+WHERE/i)) {
-                suggestions.push('💡 Обнаружено два WHERE. Удалите лишний.');
-            }
-            if (query.match(/SELECT\s+FROM/i)) {
-                suggestions.push('💡 После SELECT нужно указать колонки. Пример: SELECT * FROM table');
-            }
-        }
-
-        if (lowerError.includes('column') && lowerError.includes('does not exist')) {
-            const columnMatch = errorMessage.match(/"([^"]+)"/);
-            if (columnMatch) {
-                const columnName = columnMatch[1];
-                suggestions.push(`💡 Колонка "${columnName}" не существует. Проверьте название колонки.`);
-
-                const allColumns = [];
-                for (const table in currentTablesWithColumns) {
-                    if (currentTablesWithColumns[table]) {
-                        currentTablesWithColumns[table].forEach(col => {
-                            allColumns.push(col);
-                        });
-                    }
-                }
-                const similar = allColumns.filter(col =>
-                    col.toLowerCase().includes(columnName.toLowerCase()) ||
-                    columnName.toLowerCase().includes(col.toLowerCase())
-                );
-                if (similar.length > 0) {
-                    suggestions.push(`💡 Возможно, вы имели в виду: ${similar.slice(0, 3).join(', ')}`);
-                }
-            }
-        }
-
-        if (lowerError.includes('relation') && lowerError.includes('does not exist')) {
-            const tableMatch = errorMessage.match(/"([^"]+)"/);
-            if (tableMatch) {
-                const tableName = tableMatch[1];
-                suggestions.push(`💡 Таблица "${tableName}" не существует.`);
-                if (currentTables.length > 0) {
-                    suggestions.push(`💡 Доступные таблицы: ${currentTables.join(', ')}`);
-                }
-            }
-        }
-
-        if (lowerError.includes('permission denied')) {
-            suggestions.push('💡 У вас нет прав на выполнение этой операции. Разрешены только SELECT запросы.');
-        }
-
-        if (lowerError.includes('timeout')) {
-            suggestions.push('💡 Запрос выполняется слишком долго. Попробуйте добавить LIMIT или оптимизировать запрос.');
-        }
-
-        if (suggestions.length === 0) {
-            suggestions.push('💡 Проверьте синтаксис SQL. Убедитесь, что названия таблиц и колонок написаны правильно.');
-        }
-
-        return suggestions.join('\n');
+    const dbNameElement = document.getElementById('dbName');
+    if (dbNameElement) {
+        dbNameElement.textContent = dbName;
     }
+}
 
-    function getQueryToExecute() {
-        let query = '';
-
-        if (sqlEditor) {
-            const selection = sqlEditor.getSelection();
-            if (selection && selection.trim().length > 0) {
-                query = selection.trim();
-            } else {
-                query = sqlEditor.getValue().trim();
-            }
-        } else {
-            const textarea = document.getElementById('sqlQuery');
-            if (textarea) {
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                if (start !== end) {
-                    const selected = textarea.value.substring(start, end);
-                    if (selected && selected.trim().length > 0) {
-                        query = selected.trim();
-                    }
-                } else {
-                    query = textarea.value.trim();
-                }
-            }
-        }
-
-        return formatQuery(query);
-    }
-
-    function loadDatabases() {
-        const token = getAuthToken();
-        fetch('/api/databases', {
-            headers: token ? { 'Authorization': 'Bearer ' + token } : {}
-        })
-            .then(response => {
-                if (response.status === 401) {
-                    window.location.href = '/login';
-                    throw new Error('Unauthorized');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success && data.databases && data.databases.length > 0) {
-                    dbSelector.innerHTML = '<option value="">Выберите базу данных</option>';
-
-                    data.databases.forEach(db => {
-                        const option = document.createElement('option');
-                        option.value = db;
-                        option.textContent = db;
-                        dbSelector.appendChild(option);
-                    });
-
-                    const savedDb = localStorage.getItem('selectedDatabase');
-                    if (savedDb && data.databases.includes(savedDb)) {
-                        dbSelector.value = savedDb;
-                        changeDatabase(savedDb);
-                    } else if (data.databases.length > 0) {
-                        dbSelector.value = data.databases[0];
-                        changeDatabase(data.databases[0]);
-                    }
-                } else {
-                    dbSelector.innerHTML = '<option value="">Нет доступных баз</option>';
-                    document.getElementById('dbInfoCard').style.display = 'none';
-                }
-            })
-            .catch(error => {
-                console.error('Error loading databases:', error);
-                dbSelector.innerHTML = '<option value="">Ошибка загрузки баз</option>';
-            });
-    }
-
-    async function loadTableColumns(dbName, tableName) {
-        try {
-            const token = getAuthToken();
-            const response = await fetch(`/api/columns?db=${encodeURIComponent(dbName)}&table=${encodeURIComponent(tableName)}`, {
-                headers: token ? { 'Authorization': 'Bearer ' + token } : {}
-            });
-            const data = await response.json();
-            if (data.success) {
-                currentTablesWithColumns[tableName] = data.columns;
-            }
-        } catch (error) {
-            console.error(`Failed to load columns for ${tableName}:`, error);
-        }
-    }
-
-    async function loadAllTableColumns(dbName, tables) {
-        currentTablesWithColumns = {};
-        for (const table of tables) {
-            await loadTableColumns(dbName, table);
-        }
-    }
-
-    function executeQuery() {
-        const selectedDb = dbSelector.value;
-        if (!selectedDb) {
-            alert('Выберите базу данных');
-            return;
-        }
-
-        let query = getQueryToExecute();
-        if (!query) {
-            alert('Введите или выделите SQL запрос');
-            return;
-        }
-
-        if (!query.toLowerCase().startsWith('select')) {
-            alert('Для выполнения разрешены только SELECT запросы');
-            return;
-        }
-
-        resultContainer.innerHTML = '<div class="empty-state">⏳ Выполнение запроса...</div>';
-
-        // Получаем состояние чекбокса
-        const showExplain = document.getElementById('showExplainCheckbox')?.checked ?? true;
-
-        const treeView = document.getElementById('explainTreeView');
-        const textView = document.getElementById('explainTextView');
-        if (treeView) treeView.innerHTML = showExplain ? '-- Получение плана выполнения...' : '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
-        if (textView) textView.textContent = showExplain ? '-- Получение плана выполнения...' : '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
-
-        const token = getAuthToken();
-
-        // Добавляем параметр explain в запрос
-        const bodyParams = new URLSearchParams({
-            'database': selectedDb,
-            'query': query,
-            'explain': showExplain ? 'true' : 'false'  // НОВЫЙ ПАРАМЕТР
-        });
-
-        fetch('/api/execute', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': token ? 'Bearer ' + token : ''
-            },
-            body: bodyParams
-        })
-        .then(response => {
-            if (response.status === 401) {
-                window.location.href = '/login';
-                throw new Error('Unauthorized');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.error) {
-                const hint = getErrorHint(query, data.error);
-                resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">
-                    ❌ Ошибка: ${escapeHtml(data.error)}<br><br>
-                    <span style="color: #f59e0b; font-size: 0.9rem;">${escapeHtml(hint)}</span>
-                </div>`;
-            } else {
-                displayResults(data);
-            }
-        })
-        .catch(error => {
-            resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка соединения: ${error}</div>`;
-        });
-    }
-
-    function displayResults(data) {
-        if (data.error) {
-            resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка: ${data.error}</div>`;
-            return;
-        }
-
-        executionTime.textContent = `⏱️ Время: ${data.executionTimeMs} мс`;
-        rowCount.textContent = `${data.rows.length} строк`;
-
-        // Визуализация EXPLAIN
-        const showExplain = document.getElementById('showExplainCheckbox')?.checked ?? true;
-
-        if (!showExplain) {
-            // Если EXPLAIN выключен, показываем сообщение
-            const treeView = document.getElementById('explainTreeView');
-            const textView = document.getElementById('explainTextView');
-            if (treeView) treeView.innerHTML = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
-            if (textView) textView.textContent = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
-        } else if (data.explainJson || data.explainText) {
-            displayExplain(data.explainJson, data.explainText);
-        } else if (data.explain) {
-            displayExplain(data.explain, data.explain);
-        } else {
-            const treeView = document.getElementById('explainTreeView');
-            const textView = document.getElementById('explainTextView');
-            if (treeView) treeView.innerHTML = '-- Здесь появится вывод EXPLAIN ANALYZE';
-            if (textView) textView.textContent = '-- Здесь появится вывод EXPLAIN ANALYZE';
-        }
-
-        if (!data.rows || data.rows.length === 0) {
-            resultContainer.innerHTML = '<div class="empty-state">✅ Запрос выполнен, но не вернул данных</div>';
-            return;
-        }
-
-        let tableHTML = '<div class="table-wrapper"><table class="results-table">';
-        tableHTML += '<thead><tr>';
-        data.columns.forEach(col => {
-            tableHTML += `<th>${escapeHtml(col)}</th>`;
-        });
-        tableHTML += '<tr></thead><tbody>';
-
-        data.rows.forEach(row => {
-            tableHTML += '<tr>';
-            data.columns.forEach(col => {
-                let value = row[col];
-                if (value === null) value = 'NULL';
-                else if (value === undefined) value = '—';
-                else if (typeof value === 'object') value = JSON.stringify(value);
-                else value = String(value);
-
-                let displayValue = value.length > 100 ? value.substring(0, 100) + '...' : value;
-                tableHTML += `<td title="${escapeHtml(value)}">${escapeHtml(displayValue)}</td>`;
-            });
-            tableHTML += '</tr>';
-        });
-        tableHTML += '</tbody></table></div>';
-
-        resultContainer.innerHTML = tableHTML;
-    }
-
-    function displayExplain(explainData, explainText) {
-        const treeView = document.getElementById('explainTreeView');
-        const textView = document.getElementById('explainTextView');
-
-        if (!treeView || !textView) {
-            const explainContainer = document.getElementById('explainContainer');
-            if (explainContainer) {
-                explainContainer.innerHTML = renderExplainTree(explainData);
-            }
-            return;
-        }
-
-        // Рендерим дерево (из JSON)
-        if (explainData && explainData !== explainText) {
-            treeView.innerHTML = renderExplainTree(explainData);
-        } else {
-            treeView.innerHTML = renderExplainTree(explainText);
-        }
-
-        // Рендерим оригинальный текст PostgreSQL
-        if (explainText) {
-            textView.textContent = explainText;
-        } else if (typeof explainData === 'string') {
-            textView.textContent = explainData;
-        } else {
-            textView.textContent = 'Нет данных EXPLAIN';
-        }
-
-        // Устанавливаем активное представление по умолчанию (дерево)
-        treeView.style.display = 'block';
-        textView.style.display = 'none';
-
-        // Обновляем активную кнопку
-        const activeBtn = document.querySelector('.explain-view-btn[data-view="tree"]');
-        if (activeBtn) {
-            document.querySelectorAll('.explain-view-btn').forEach(b => b.classList.remove('active'));
-            activeBtn.classList.add('active');
-        }
-    }
-
-    function generateSignature(query, time, rows, dbName) {
-        const data = query + time + rows + dbName + new Date().toDateString();
-        let hash = 0;
-        for (let i = 0; i < data.length; i++) {
-            const char = data.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash;
-        }
-        return Math.abs(hash).toString(16).padStart(8, '0');
-    }
-
-    function downloadCSV() {
-        const selectedDb = dbSelector.value;
-        if (!selectedDb) {
-            alert('Выберите базу данных');
-            return;
-        }
-
-        let query = getQueryToExecute();
-        if (!query) {
-            alert('Введите или выделите SQL запрос');
-            return;
-        }
-
-        resultContainer.innerHTML = '<div class="empty-state">⏳ Подготовка файла...</div>';
-
-        const token = getAuthToken();
-        fetch('/api/execute', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': token ? 'Bearer ' + token : ''
-            },
-            body: new URLSearchParams({
-                'database': selectedDb,
-                'query': query
-            })
-        })
-        .then(response => {
-            if (response.status === 401) {
-                window.location.href = '/login';
-                throw new Error('Unauthorized');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.error) {
-                resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка: ${data.error}</div>`;
-                return;
-            }
-
-            const signature = generateSignature(query, data.executionTimeMs, data.rows.length, selectedDb);
-
-            let csv = '';
-            csv += `# SQL Query: ${query.replace(/\n/g, ' ')}\n`;
-            csv += `# Database: ${selectedDb}\n`;
-            csv += `# Execution Time: ${data.executionTimeMs} ms\n`;
-            csv += `# Rows: ${data.rows.length}\n`;
-            csv += `# Generated: ${new Date().toLocaleString()}\n`;
-            csv += `# Signature: ${signature}\n`;
-            csv += '\n';
-
-            csv += data.columns.join(',') + '\n';
-
-            data.rows.forEach(row => {
-                const rowData = data.columns.map(col => {
-                    let value = row[col];
-                    if (value === null) return 'NULL';
-                    if (typeof value === 'string') {
-                        if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-                            return `"${value.replace(/"/g, '""')}"`;
-                        }
-                    }
-                    return value;
-                });
-                csv += rowData.join(',') + '\n';
-            });
-
-            const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-
-            link.setAttribute('href', url);
-            link.setAttribute('download', `query_${selectedDb}_${timestamp}.csv`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-
-            displayResults(data);
-        })
-        .catch(error => {
-            resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка соединения: ${error}</div>`;
-        });
-    }
-
-    function clearResult() {
-        if (sqlEditor) {
-            sqlEditor.setValue('SELECT * FROM student LIMIT 10;');
-        } else if (document.getElementById('sqlQuery')) {
-            document.getElementById('sqlQuery').value = 'SELECT * FROM student LIMIT 10;';
-        }
-        if (resultContainer) {
-            resultContainer.innerHTML = '<div class="empty-state">Выберите базу данных и выполните запрос</div>';
-        }
-        if (executionTime) executionTime.textContent = '';
-        if (rowCount) rowCount.textContent = '';
-
-        const showExplain = document.getElementById('showExplainCheckbox')?.checked ?? true;
-        const treeView = document.getElementById('explainTreeView');
-        const textView = document.getElementById('explainTextView');
-
-        if (showExplain) {
-            if (treeView) treeView.innerHTML = '-- Здесь появится вывод EXPLAIN ANALYZE';
-            if (textView) textView.textContent = '-- Здесь появится вывод EXPLAIN ANALYZE';
-        } else {
-            if (treeView) treeView.innerHTML = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
-            if (textView) textView.textContent = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
-        }
-    }
-});
-
-// ============================================
-// ГЛОБАЛЬНЫЕ ФУНКЦИИ
-// ============================================
-
+/**
+ * Загрузка информации о базе данных (таблицы)
+ */
 function loadDbInfo(dbName) {
     if (!dbName) return;
 
@@ -713,37 +222,23 @@ function loadDbInfo(dbName) {
     const tablesList = document.getElementById('tablesList');
     const tablesCountSpan = document.getElementById('tablesCount');
     const dbNameElement = document.getElementById('dbName');
-    const currentDbBadge = document.getElementById('currentDbBadge');
     const dbInfoCard = document.getElementById('dbInfoCard');
 
-    dbNameElement.textContent = dbName;
-    currentDbBadge.textContent = dbName;
-    currentDbBadge.title = dbName;
-    dbInfoCard.style.display = 'block';
-
-    if (tablesCountSpan) {
-        tablesCountSpan.textContent = '0';
-    }
-
-    tablesList.innerHTML = '<li style="text-align: center; justify-content: center;">⏳ Загрузка таблиц...</li>';
+    if (dbNameElement) dbNameElement.textContent = dbName;
+    if (dbInfoCard) dbInfoCard.style.display = 'block';
+    if (tablesCountSpan) tablesCountSpan.textContent = '0';
+    if (tablesList) tablesList.innerHTML = '<div class="empty-state">Загрузка таблиц...</div>';
 
     currentDbRequest = new AbortController();
 
-    const token = getAuthToken();
     fetch('/api/dbinfo?db=' + encodeURIComponent(dbName), {
-        signal: currentDbRequest.signal,
-        headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+        signal: currentDbRequest.signal
     })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(async (data) => {
             if (currentDbName !== dbName) return;
 
-            if (data.success) {
+            if (data.success && tablesList) {
                 currentTables = data.tables || [];
                 tablesList.innerHTML = '';
 
@@ -762,42 +257,33 @@ function loadDbInfo(dbName) {
 
                     await loadAllTableColumns(dbName, currentTables);
                 } else {
-                    tablesList.innerHTML = '<li style="text-align: center; justify-content: center;">📭 Нет таблиц</li>';
+                    tablesList.innerHTML = '<div class="empty-state">Нет таблиц</div>';
                 }
-            } else {
-                tablesList.innerHTML = `<li style="color: #ef4444; text-align: center; justify-content: center;">❌ ${data.error || 'Ошибка загрузки'}</li>`;
-                if (tablesCountSpan) {
-                    tablesCountSpan.textContent = '0';
-                }
+            } else if (tablesList) {
+                tablesList.innerHTML = `<div class="empty-state">Ошибка: ${data.error || 'Неизвестная ошибка'}</div>`;
             }
             currentDbRequest = null;
         })
         .catch(error => {
-            if (error.name === 'AbortError') {
-                return;
-            }
+            if (error.name === 'AbortError') return;
             console.error('Error loading db info:', error);
-            if (currentDbName === dbName) {
-                tablesList.innerHTML = '<li style="color: #ef4444; text-align: center; justify-content: center;">❌ Ошибка соединения</li>';
-                if (tablesCountSpan) {
-                    tablesCountSpan.textContent = '0';
-                }
+            if (currentDbName === dbName && tablesList) {
+                tablesList.innerHTML = '<div class="empty-state">Ошибка соединения</div>';
             }
             currentDbRequest = null;
         });
 }
 
+/**
+ * Загружает колонки для всех таблиц
+ */
 async function loadAllTableColumns(dbName, tables) {
     for (const table of tables) {
         try {
-            const token = getAuthToken();
-            const response = await fetch(`/api/columns?db=${encodeURIComponent(dbName)}&table=${encodeURIComponent(table)}`, {
-                headers: token ? { 'Authorization': 'Bearer ' + token } : {}
-            });
+            const response = await fetch(`/api/columns?db=${encodeURIComponent(dbName)}&table=${encodeURIComponent(table)}`);
             const data = await response.json();
             if (data.success) {
-                window.currentTablesWithColumns = window.currentTablesWithColumns || {};
-                window.currentTablesWithColumns[table] = data.columns;
+                currentTablesWithColumns[table] = data.columns;
             }
         } catch (error) {
             console.error(`Failed to load columns for ${table}:`, error);
@@ -805,6 +291,9 @@ async function loadAllTableColumns(dbName, tables) {
     }
 }
 
+/**
+ * Вставляет имя таблицы в редактор
+ */
 function insertTableName(tableName) {
     if (sqlEditor) {
         const cursor = sqlEditor.getCursor();
@@ -821,33 +310,245 @@ function insertTableName(tableName) {
     }
 }
 
-function changeDatabase(dbName) {
-    if (!dbName) {
-        const dbInfoCard = document.getElementById('dbInfoCard');
-        if (dbInfoCard) dbInfoCard.style.display = 'none';
+/**
+ * Форматирует SQL запрос
+ */
+function formatQuery(query) {
+    if (!query) return '';
+
+    let formatted = query;
+
+    formatted = formatted.replace(/\bselect\b/gi, 'SELECT');
+    formatted = formatted.replace(/\bfrom\b/gi, 'FROM');
+    formatted = formatted.replace(/\bwhere\b/gi, 'WHERE');
+    formatted = formatted.replace(/\bjoin\b/gi, 'JOIN');
+    formatted = formatted.replace(/\bleft join\b/gi, 'LEFT JOIN');
+    formatted = formatted.replace(/\bright join\b/gi, 'RIGHT JOIN');
+    formatted = formatted.replace(/\binner join\b/gi, 'INNER JOIN');
+    formatted = formatted.replace(/\bgroup by\b/gi, 'GROUP BY');
+    formatted = formatted.replace(/\border by\b/gi, 'ORDER BY');
+    formatted = formatted.replace(/\bhaving\b/gi, 'HAVING');
+    formatted = formatted.replace(/\blimit\b/gi, 'LIMIT');
+    formatted = formatted.replace(/\boffset\b/gi, 'OFFSET');
+    formatted = formatted.replace(/\band\b/gi, 'AND');
+    formatted = formatted.replace(/\bor\b/gi, 'OR');
+    formatted = formatted.replace(/\bnot\b/gi, 'NOT');
+    formatted = formatted.replace(/\bin\b/gi, 'IN');
+    formatted = formatted.replace(/\bexists\b/gi, 'EXISTS');
+    formatted = formatted.replace(/\bbetween\b/gi, 'BETWEEN');
+    formatted = formatted.replace(/\blike\b/gi, 'LIKE');
+    formatted = formatted.replace(/\bis null\b/gi, 'IS NULL');
+    formatted = formatted.replace(/\bis not null\b/gi, 'IS NOT NULL');
+    formatted = formatted.replace(/\bas\b/gi, 'AS');
+    formatted = formatted.replace(/\bon\b/gi, 'ON');
+
+    formatted = formatted.replace(/SELECT\*/gi, 'SELECT *');
+    formatted = formatted.replace(/,([^\s])/g, ', $1');
+    formatted = formatted.replace(/\s+/g, ' ');
+    formatted = formatted.replace(/FROM/g, '\nFROM');
+    formatted = formatted.replace(/WHERE/g, '\nWHERE');
+    formatted = formatted.replace(/JOIN/g, '\nJOIN');
+    formatted = formatted.replace(/LEFT JOIN/g, '\nLEFT JOIN');
+    formatted = formatted.replace(/RIGHT JOIN/g, '\nRIGHT JOIN');
+    formatted = formatted.replace(/GROUP BY/g, '\nGROUP BY');
+    formatted = formatted.replace(/ORDER BY/g, '\nORDER BY');
+
+    return formatted.trim();
+}
+
+/**
+ * Выполняет SQL запрос
+ */
+function executeQuery() {
+    const dbSelect = document.getElementById('dbSelector');
+    const selectedDb = dbSelect ? dbSelect.value : null;
+
+    if (!selectedDb) {
+        alert('Выберите базу данных');
         return;
     }
 
-    localStorage.setItem('selectedDatabase', dbName);
-
-    const dbSelector = document.getElementById('dbSelector');
-    if (dbSelector && dbSelector.value !== dbName) {
-        dbSelector.value = dbName;
+    let query = '';
+    if (sqlEditor) {
+        const selection = sqlEditor.getSelection();
+        if (selection && selection.trim().length > 0) {
+            query = selection.trim();
+        } else {
+            query = sqlEditor.getValue().trim();
+        }
+    } else {
+        const textarea = document.getElementById('sqlQuery');
+        if (textarea) {
+            query = textarea.value.trim();
+        }
     }
 
-    loadDbInfo(dbName);
+    query = formatQuery(query);
+
+    if (!query) {
+        alert('Введите SQL запрос');
+        return;
+    }
 
     const resultContainer = document.getElementById('resultContainer');
-    const executionTime = document.getElementById('executionTime');
-    const rowCount = document.getElementById('rowCount');
+    if (resultContainer) {
+        resultContainer.innerHTML = '<div class="empty-state">⏳ Выполнение запроса...</div>';
+    }
+
+    const showExplainCheckbox = document.getElementById('showExplainCheckbox');
+    const showExplain = showExplainCheckbox ? showExplainCheckbox.checked : true;
+
+    const treeView = document.getElementById('explainTreeView');
+    const textView = document.getElementById('explainTextView');
+    if (treeView) treeView.innerHTML = showExplain ? '-- Получение плана выполнения...' : '-- EXPLAIN отключён.';
+    if (textView) textView.textContent = showExplain ? '-- Получение плана выполнения...' : '-- EXPLAIN отключён.';
+
+    const bodyParams = new URLSearchParams({
+        'database': selectedDb,
+        'query': query,
+        'explain': showExplain ? 'true' : 'false'
+    });
+
+    fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: bodyParams
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            if (resultContainer) {
+                resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка: ${escapeHtml(data.error)}</div>`;
+            }
+        } else {
+            displayResults(data);
+        }
+    })
+    .catch(error => {
+        if (resultContainer) {
+            resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка соединения: ${error}</div>`;
+        }
+    });
+}
+
+/**
+ * Отображает результаты запроса
+ */
+function displayResults(data) {
+    const resultContainer = document.getElementById('resultContainer');
+    const executionTimeSpan = document.getElementById('executionTime');
+    const rowCountSpan = document.getElementById('rowCount');
+
+    if (data.error) {
+        if (resultContainer) {
+            resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка: ${escapeHtml(data.error)}</div>`;
+        }
+        return;
+    }
+
+    if (executionTimeSpan) executionTimeSpan.textContent = `⏱️ Время: ${data.executionTimeMs} мс`;
+    if (rowCountSpan) rowCountSpan.textContent = `${data.rows.length} строк`;
+
+    const showExplainCheckbox = document.getElementById('showExplainCheckbox');
+    const showExplain = showExplainCheckbox ? showExplainCheckbox.checked : true;
+
+    if (!showExplain) {
+        const treeView = document.getElementById('explainTreeView');
+        const textView = document.getElementById('explainTextView');
+        if (treeView) treeView.innerHTML = '-- EXPLAIN отключён.';
+        if (textView) textView.textContent = '-- EXPLAIN отключён.';
+    } else if (data.explainJson || data.explainText) {
+        displayExplain(data.explainJson, data.explainText);
+    }
+
+    if (!data.rows || data.rows.length === 0) {
+        if (resultContainer) {
+            resultContainer.innerHTML = '<div class="empty-state">✅ Запрос выполнен, но не вернул данных</div>';
+        }
+        return;
+    }
+
+    let tableHTML = '<div class="table-wrapper"><table class="results-table">';
+    tableHTML += '<thead><tr>';
+    data.columns.forEach(col => {
+        tableHTML += `<th>${escapeHtml(col)}</th>`;
+    });
+    tableHTML += '<tr></thead><tbody>';
+
+    data.rows.forEach(row => {
+        tableHTML += '<tr>';
+        data.columns.forEach(col => {
+            let value = row[col];
+            if (value === null) value = 'NULL';
+            else if (value === undefined) value = '—';
+            else if (typeof value === 'object') value = JSON.stringify(value);
+            else value = String(value);
+
+            let displayValue = value.length > 100 ? value.substring(0, 100) + '...' : value;
+            tableHTML += `<td title="${escapeHtml(value)}">${escapeHtml(displayValue)}</td>`;
+        });
+        tableHTML += '</tr>';
+    });
+    tableHTML += '</tbody></table></div>';
 
     if (resultContainer) {
-        resultContainer.innerHTML = '<div class="empty-state">✅ База данных изменена. Выполните запрос.</div>';
+        resultContainer.innerHTML = tableHTML;
     }
-    if (executionTime) executionTime.textContent = '';
-    if (rowCount) rowCount.textContent = '';
+}
 
-    const showExplain = document.getElementById('showExplainCheckbox')?.checked ?? true;
+/**
+ * Отображает план выполнения EXPLAIN
+ */
+function displayExplain(explainData, explainText) {
+    const treeView = document.getElementById('explainTreeView');
+    const textView = document.getElementById('explainTextView');
+
+    if (!treeView || !textView) return;
+
+    if (explainData && explainData !== explainText) {
+        treeView.innerHTML = renderExplainTree(explainData);
+    } else {
+        treeView.innerHTML = renderExplainTree(explainText);
+    }
+
+    if (explainText) {
+        textView.textContent = explainText;
+    } else if (typeof explainData === 'string') {
+        textView.textContent = explainData;
+    } else {
+        textView.textContent = 'Нет данных EXPLAIN';
+    }
+
+    treeView.style.display = 'block';
+    textView.style.display = 'none';
+
+    const activeBtn = document.querySelector('.explain-view-btn[data-view="tree"]');
+    if (activeBtn) {
+        document.querySelectorAll('.explain-view-btn').forEach(b => b.classList.remove('active'));
+        activeBtn.classList.add('active');
+    }
+}
+
+/**
+ * Очищает результаты
+ */
+function clearResult() {
+    if (sqlEditor) {
+        sqlEditor.setValue('SELECT * FROM student LIMIT 10;');
+    }
+
+    const resultContainer = document.getElementById('resultContainer');
+    const executionTimeSpan = document.getElementById('executionTime');
+    const rowCountSpan = document.getElementById('rowCount');
+
+    if (resultContainer) {
+        resultContainer.innerHTML = '<div class="empty-state">Выберите базу данных и выполните запрос</div>';
+    }
+    if (executionTimeSpan) executionTimeSpan.textContent = '';
+    if (rowCountSpan) rowCountSpan.textContent = '';
+
+    const showExplainCheckbox = document.getElementById('showExplainCheckbox');
+    const showExplain = showExplainCheckbox ? showExplainCheckbox.checked : true;
     const treeView = document.getElementById('explainTreeView');
     const textView = document.getElementById('explainTextView');
 
@@ -855,10 +556,368 @@ function changeDatabase(dbName) {
         if (treeView) treeView.innerHTML = '-- Здесь появится вывод EXPLAIN ANALYZE';
         if (textView) textView.textContent = '-- Здесь появится вывод EXPLAIN ANALYZE';
     } else {
-        if (treeView) treeView.innerHTML = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
-        if (textView) textView.textContent = '-- EXPLAIN отключён. Включите чекбокс для просмотра плана.';
+        if (treeView) treeView.innerHTML = '-- EXPLAIN отключён.';
+        if (textView) textView.textContent = '-- EXPLAIN отключён.';
     }
 }
+
+/**
+ * Скачивает результаты в CSV
+ */
+function downloadCSV() {
+    const dbSelect = document.getElementById('dbSelector');
+    const selectedDb = dbSelect ? dbSelect.value : null;
+
+    if (!selectedDb) {
+        alert('Выберите базу данных');
+        return;
+    }
+
+    let query = '';
+    if (sqlEditor) {
+        query = sqlEditor.getValue().trim();
+    } else {
+        const textarea = document.getElementById('sqlQuery');
+        if (textarea) {
+            query = textarea.value.trim();
+        }
+    }
+
+    if (!query) {
+        alert('Введите SQL запрос');
+        return;
+    }
+
+    const resultContainer = document.getElementById('resultContainer');
+    if (resultContainer) {
+        resultContainer.innerHTML = '<div class="empty-state">⏳ Подготовка файла...</div>';
+    }
+
+    fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            'database': selectedDb,
+            'query': query
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            if (resultContainer) {
+                resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка: ${data.error}</div>`;
+            }
+            return;
+        }
+
+        const signature = generateSignature(query, data.executionTimeMs, data.rows.length, selectedDb);
+
+        let csv = '';
+        csv += `# SQL Query: ${query.replace(/\n/g, ' ')}\n`;
+        csv += `# Database: ${selectedDb}\n`;
+        csv += `# Execution Time: ${data.executionTimeMs} ms\n`;
+        csv += `# Rows: ${data.rows.length}\n`;
+        csv += `# Generated: ${new Date().toLocaleString()}\n`;
+        csv += `# Signature: ${signature}\n`;
+        csv += '\n';
+
+        csv += data.columns.join(',') + '\n';
+
+        data.rows.forEach(row => {
+            const rowData = data.columns.map(col => {
+                let value = row[col];
+                if (value === null) return 'NULL';
+                if (typeof value === 'string') {
+                    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                        return `"${value.replace(/"/g, '""')}"`;
+                    }
+                }
+                return value;
+            });
+            csv += rowData.join(',') + '\n';
+        });
+
+        const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `query_${selectedDb}_${timestamp}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        displayResults(data);
+    })
+    .catch(error => {
+        if (resultContainer) {
+            resultContainer.innerHTML = `<div class="empty-state" style="color: #ef4444;">❌ Ошибка соединения: ${error}</div>`;
+        }
+    });
+}
+
+/**
+ * Генерирует подпись для CSV
+ */
+function generateSignature(query, time, rows, dbName) {
+    const data = query + time + rows + dbName + new Date().toDateString();
+    let hash = 0;
+    for (let i = 0; i < data.length; i++) {
+        const char = data.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(16).padStart(8, '0');
+}
+
+/**
+ * Кастомный хинт для автодополнения CodeMirror
+ */
+function customSqlHint(cm) {
+    const cursor = cm.getCursor();
+    const token = cm.getTokenAt(cursor);
+    const line = cm.getLine(cursor.line);
+    const textBeforeCursor = line.substring(0, cursor.ch);
+
+    let hints = [];
+    let from = { line: cursor.line, ch: token.start };
+    let to = { line: cursor.line, ch: token.end };
+
+    const afterFromMatch = textBeforeCursor.match(/FROM\s+$/i);
+    const afterJoinMatch = textBeforeCursor.match(/JOIN\s+$/i);
+    const afterSelectMatch = textBeforeCursor.match(/SELECT\s+$/i);
+    const afterWhereMatch = textBeforeCursor.match(/WHERE\s+$/i);
+    const afterTableDot = textBeforeCursor.match(/(\w+)\.$/i);
+
+    if (afterFromMatch || afterJoinMatch) {
+        hints = currentTables;
+    } else if (afterSelectMatch) {
+        const allColumns = [];
+        for (const table in currentTablesWithColumns) {
+            if (currentTablesWithColumns[table]) {
+                currentTablesWithColumns[table].forEach(col => {
+                    allColumns.push(`${table}.${col}`);
+                    allColumns.push(col);
+                });
+            }
+        }
+        hints = [...new Set([...allColumns, ...sqlKeywords])];
+    } else if (afterWhereMatch) {
+        const allColumns = [];
+        for (const table in currentTablesWithColumns) {
+            if (currentTablesWithColumns[table]) {
+                currentTablesWithColumns[table].forEach(col => {
+                    allColumns.push(`${table}.${col}`);
+                    allColumns.push(col);
+                });
+            }
+        }
+        hints = [...new Set([...allColumns, ...sqlKeywords])];
+    } else if (afterTableDot) {
+        const tableName = afterTableDot[1];
+        if (currentTablesWithColumns[tableName]) {
+            hints = currentTablesWithColumns[tableName];
+        } else {
+            hints = sqlKeywords;
+        }
+    } else {
+        hints = [...sqlKeywords, ...currentTables];
+    }
+
+    const currentWord = token.string;
+    if (currentWord) {
+        hints = hints.filter(h => h.toLowerCase().startsWith(currentWord.toLowerCase()));
+    }
+
+    return {
+        list: hints,
+        from: from,
+        to: to
+    };
+}
+
+/**
+ * Форматирует и устанавливает запрос в редактор
+ */
+function formatQueryAndSet() {
+    if (sqlEditor) {
+        const currentQuery = sqlEditor.getValue();
+        const formatted = formatQuery(currentQuery);
+        if (formatted !== currentQuery) {
+            sqlEditor.setValue(formatted);
+            sqlEditor.focus();
+        }
+    }
+}
+
+/**
+ * Инициализация страницы
+ */
+function initPage() {
+    // Загрузка списка баз данных
+    loadDatabasesList();
+
+    // Инициализация CodeMirror
+    initSqlEditor();
+
+    // Инициализация кнопок
+    initButtons();
+
+    // Инициализация переключения EXPLAIN
+    initExplainToggle();
+
+    // Инициализация навигации (кнопки панели преподавателя и выхода)
+    initNavigation();
+}
+
+/**
+ * Инициализация SQL редактора CodeMirror
+ */
+function initSqlEditor() {
+    const textarea = document.getElementById('sqlQuery');
+    if (!textarea) return;
+
+    sqlEditor = CodeMirror.fromTextArea(textarea, {
+        mode: 'text/x-sql',
+        theme: 'dracula',
+        lineNumbers: true,
+        lineWrapping: true,
+        matchBrackets: true,
+        autoCloseBrackets: true,
+        indentUnit: 4,
+        tabSize: 4,
+        extraKeys: {
+            'Ctrl-Space': 'autocomplete',
+            'Ctrl-Enter': () => executeQuery(),
+            'Ctrl-Shift-F': () => formatQueryAndSet()
+        }
+    });
+
+    sqlEditor.setOption('hintOptions', {
+        hint: customSqlHint,
+        completeSingle: false,
+        alignWithWord: false
+    });
+}
+
+/**
+ * Инициализация кнопок управления
+ */
+function initButtons() {
+    const executeBtn = document.getElementById('executeBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const formatBtn = document.getElementById('formatBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const submitPasswordBtn = document.getElementById('submitPasswordBtn');
+
+    if (executeBtn) executeBtn.addEventListener('click', executeQuery);
+    if (clearBtn) clearBtn.addEventListener('click', clearResult);
+    if (formatBtn) formatBtn.addEventListener('click', formatQueryAndSet);
+    if (downloadBtn) downloadBtn.addEventListener('click', downloadCSV);
+    if (submitPasswordBtn) {
+        submitPasswordBtn.addEventListener('click', () => {
+            if (currentPasswordCallback) currentPasswordCallback();
+        });
+    }
+}
+
+/**
+ * Инициализация переключения между древовидным и текстовым представлением EXPLAIN
+ */
+function initExplainToggle() {
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.explain-view-btn');
+        if (!btn) return;
+
+        const view = btn.getAttribute('data-view');
+        const treeView = document.getElementById('explainTreeView');
+        const textView = document.getElementById('explainTextView');
+
+        if (!treeView || !textView) return;
+
+        // Скрываем все активные кнопки
+        document.querySelectorAll('.explain-view-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // Показываем выбранное представление
+        if (view === 'tree') {
+            treeView.style.display = 'block';
+            textView.style.display = 'none';
+        } else if (view === 'text') {
+            treeView.style.display = 'none';
+            textView.style.display = 'block';
+        }
+    });
+}
+
+/**
+ * Инициализация навигации: управление кнопками "Панель преподавателя" и "Выйти"
+ *
+ * Логика отображения:
+ * - Неавторизованный пользователь (студент): видит только кнопку "Панель преподавателя"
+ * - Авторизованный преподаватель: видит обе кнопки
+ * - После выхода: сессия уничтожается, кнопка "Выйти" скрывается
+ */
+function initNavigation() {
+    const teacherLinkBtn = document.getElementById('teacherLinkBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    // Если кнопок нет на странице — выходим
+    if (!teacherLinkBtn && !logoutBtn) return;
+
+    // Функция обновления видимости кнопок
+    function updateButtonsVisibility(isAuthenticated) {
+        if (teacherLinkBtn) {
+            // Кнопка "Панель преподавателя" видна всегда (и студентам, и преподавателям)
+            teacherLinkBtn.style.display = 'inline-block';
+        }
+
+        if (logoutBtn) {
+            // Кнопка "Выйти" видна ТОЛЬКО авторизованному преподавателю
+            logoutBtn.style.display = isAuthenticated ? 'inline-block' : 'none';
+        }
+    }
+
+    // Проверяем статус аутентификации через GET /api/login
+    fetch('/api/login', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        updateButtonsVisibility(data.authenticated === true);
+    })
+    .catch(error => {
+        console.error('Auth check failed:', error);
+        // При ошибке считаем пользователя неавторизованным
+        updateButtonsVisibility(false);
+    });
+
+    // Обработчик кнопки "Выйти"
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+                // После успешного выхода скрываем кнопку "Выйти"
+                if (logoutBtn) logoutBtn.style.display = 'none';
+                // Перезагружаем страницу, чтобы обновить состояние
+                window.location.href = '/index';
+            } catch (error) {
+                console.error('Logout failed:', error);
+                // Даже при ошибке пытаемся перезагрузить страницу
+                window.location.href = '/index';
+            }
+        });
+    }
+}
+
+// Запуск инициализации после загрузки DOM
+document.addEventListener('DOMContentLoaded', initPage);
 
 // ============================================
 // ВИЗУАЛИЗАЦИЯ EXPLAIN

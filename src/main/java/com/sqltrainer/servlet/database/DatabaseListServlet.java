@@ -12,14 +12,15 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.*;
 
 /**
  * Сервлет для получения списка доступных учебных баз данных.
- * Исключает системные базы PostgreSQL (template0, template1, postgres).
+ * Возвращает структурированный список папок с базами данных из databases_metadata.
+ * Учитывает видимость базы и период доступа.
  */
 @WebServlet("/api/databases")
 public class DatabaseListServlet extends HttpServlet {
@@ -33,27 +34,17 @@ public class DatabaseListServlet extends HttpServlet {
         resp.setCharacterEncoding("UTF-8");
 
         Map<String, Object> response = new HashMap<>();
-        List<String> databases = new ArrayList<>();
 
-        try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.STUDENT, "postgres")) {
-            String sql = "SELECT datname FROM pg_database " +
-                    "WHERE datistemplate = false " +
-                    "AND datname NOT IN ('postgres', 'template0', 'template1') " +
-                    "AND datname NOT LIKE 'template%' " +
-                    "ORDER BY datname";
+        try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, "postgres")) {
 
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery(sql)) {
-                while (rs.next()) {
-                    databases.add(rs.getString("datname"));
-                }
-            }
+            // Получаем список папок с базами данных
+            List<Map<String, Object>> folders = getFoldersWithDatabases(conn);
 
             response.put("success", true);
-            response.put("databases", databases);
-            response.put("count", databases.size());
+            response.put("folders", folders);
+            response.put("count", folders.stream().mapToInt(f -> ((List<?>) f.get("databases")).size()).sum());
 
-            log.debug("Listed {} databases for student", databases.size());
+            log.debug("Listed {} folders with databases for student", folders.size());
 
         } catch (SQLException e) {
             log.error("Failed to list databases: {}", e.getMessage());
@@ -65,5 +56,66 @@ public class DatabaseListServlet extends HttpServlet {
         }
 
         resp.getWriter().write(gson.toJson(response));
+    }
+
+    /**
+     * Возвращает список папок с базами данных, доступными студентам.
+     * Учитывает видимость базы и период доступа.
+     */
+    private List<Map<String, Object>> getFoldersWithDatabases(Connection conn) throws SQLException {
+        List<Map<String, Object>> folders = new ArrayList<>();
+
+        String sql =
+                "SELECT " +
+                        "   df.id as folder_id, " +
+                        "   df.name as folder_name, " +
+                        "   dm.db_name, " +
+                        "   dm.display_name, " +
+                        "   dm.access_password_hash, " +
+                        "   dm.schema_image_url " +
+                        "FROM database_folders df " +
+                        "LEFT JOIN databases_metadata dm ON dm.folder_id = df.id " +
+                        "WHERE dm.is_visible = true " +
+                        "  AND (dm.access_start IS NULL OR dm.access_start <= CURRENT_DATE) " +
+                        "  AND (dm.access_end IS NULL OR dm.access_end >= CURRENT_DATE) " +
+                        "ORDER BY df.name, dm.display_name";
+
+        Map<Long, Map<String, Object>> folderMap = new LinkedHashMap<>();
+
+        try (PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                long folderId = rs.getLong("folder_id");
+                String folderName = rs.getString("folder_name");
+
+                // Получаем или создаём папку
+                Map<String, Object> folder = folderMap.get(folderId);
+                if (folder == null) {
+                    folder = new LinkedHashMap<>();
+                    folder.put("id", folderId);
+                    folder.put("name", folderName);
+                    folder.put("databases", new ArrayList<Map<String, Object>>());
+                    folderMap.put(folderId, folder);
+                }
+
+                // Добавляем базу данных в папку (если есть)
+                String dbName = rs.getString("db_name");
+                if (dbName != null && !dbName.isEmpty()) {
+                    Map<String, Object> database = new LinkedHashMap<>();
+                    database.put("dbName", dbName);
+                    database.put("displayName", rs.getString("display_name"));
+                    database.put("hasPassword", rs.getString("access_password_hash") != null);
+                    database.put("schemaImageUrl", rs.getString("schema_image_url"));
+
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> dbList = (List<Map<String, Object>>) folder.get("databases");
+                    dbList.add(database);
+                }
+            }
+        }
+
+        folders.addAll(folderMap.values());
+        return folders;
     }
 }

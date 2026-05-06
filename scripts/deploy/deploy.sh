@@ -40,18 +40,20 @@ DB_TEACHER_PASSWORD=teacher_pass
 DB_STUDENT_USER=students
 DB_STUDENT_PASSWORD=student_pass
 
-# Security
-JWT_SECRET=sql-trainer-super-secret-key-2024-must-be-at-least-256-bits-long
+# Teacher authentication
+TEACHER_PASSWORD=teacher123
 
 # Limits
 QUERY_TIMEOUT_SEC=3
 MAX_ROWS=1000
 CONNECTION_TIMEOUT_MS=5000
 
-# JWT Settings
-JWT_ACCESS_TOKEN_EXPIRY_HOURS=1
-JWT_REFRESH_TOKEN_EXPIRY_DAYS=7
-JWT_INACTIVE_TIMEOUT_HOURS=3
+# Concurrency limits
+MAX_CONCURRENT_QUERIES=10
+SEMAPHORE_TIMEOUT_SEC=30
+
+# Logging
+LOG_LEVEL=INFO
 EOF
     echo -e "${GREEN}[OK] Файл .env создан${NC}"
     echo ""
@@ -128,13 +130,13 @@ else
     sleep 5
 fi
 
-# Выполнение скрипта авторизации
-echo "[5/5] Настройка таблиц авторизации..."
-docker exec -i sql_trainer_postgres psql -U postgres < ../scripts/db/setup_auth.sql 2>/dev/null
+# Выполнение скрипта настройки метаданных
+echo "[5/5] Настройка метаданных баз данных..."
+docker exec -i sql_trainer_postgres psql -U postgres < ../scripts/db/setup_metadata.sql 2>/dev/null
 if [ $? -ne 0 ]; then
-    echo -e "${YELLOW}[WARN] Не удалось выполнить setup_auth.sql${NC}"
+    echo -e "${YELLOW}[WARN] Не удалось выполнить setup_metadata.sql${NC}"
 else
-    echo -e "${GREEN}[OK] Таблицы авторизации созданы${NC}"
+    echo -e "${GREEN}[OK] Таблицы метаданных созданы${NC}"
 fi
 
 # Выполнение скрипта учебных баз (только если данные были удалены)
@@ -164,7 +166,7 @@ echo "   РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО"
 echo "========================================"
 echo ""
 echo -e "${GREEN}[i] Приложение: http://localhost:8081${NC}"
-echo -e "${GREEN}[i] Страница входа: http://localhost:8081/login.jsp${NC}"
-echo -e "${GREEN}[i] Логин преподавателя: teacher${NC}"
+echo -e "${GREEN}[i] Страница тренажёра: http://localhost:8081/index${NC}"
+echo -e "${GREEN}[i] Панель преподавателя: http://localhost:8081/teacher${NC}"
 echo -e "${GREEN}[i] Пароль преподавателя: teacher123${NC}"
 echo ""

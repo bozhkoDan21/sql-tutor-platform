@@ -7,8 +7,9 @@
 
   <display-name>SQL Trainer</display-name>
 
+  <!-- Главная страница по умолчанию - тренажёр -->
   <welcome-file-list>
-    <welcome-file>pages/login.jsp</welcome-file>
+    <welcome-file>pages/index.jsp</welcome-file>
   </welcome-file-list>
 
   <jsp-config>

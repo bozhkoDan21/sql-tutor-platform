@@ -110,73 +110,265 @@
         .log-messages .error { color: var(--danger); }
         .log-messages .info { color: var(--primary); }
         .log-messages .warning { color: var(--warning); }
-        .btn-delete.loading {
-            opacity: 0.7;
-            pointer-events: none;
-            position: relative;
+
+        /* Вкладки */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--border);
         }
-        .btn-delete.loading::after {
-            content: '';
-            position: absolute;
-            width: 16px;
-            height: 16px;
-            top: 50%;
-            right: 10px;
-            transform: translateY(-50%);
-            border: 2px solid var(--danger-light);
-            border-top: 2px solid var(--danger);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab:hover {
+            color: var(--primary);
+        }
+        .tab.active {
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+            margin-bottom: -2px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
         }
 
-        /* Стили для секции генерации студентов */
-        .students-section {
+        /* Форма создания папки */
+        .folder-create {
             display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-        .students-section .form-group {
-            display: flex;
-            flex-direction: column;
             gap: 0.5rem;
+            margin-bottom: 1rem;
         }
-        .students-section .form-group label {
+        .folder-create input {
+            flex: 1;
+        }
+
+        /* Список папок */
+        .folders-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .folder-item {
+            background: var(--light);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        .folder-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--white);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .folder-header:hover {
+            background: var(--primary-light);
+        }
+        .folder-name {
             font-weight: 600;
             color: var(--dark);
         }
-        .students-section .form-group input {
-            padding: 0.75rem 1rem;
-            border: 2px solid var(--border);
-            border-radius: var(--radius);
-            font-size: 1rem;
-            transition: all 0.2s;
-        }
-        .students-section .form-group input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-        }
-        #generationResult {
-            margin-top: 1.5rem;
-            padding-top: 1rem;
+        .folder-databases {
+            padding: 0.5rem 1rem;
+            display: none;
+            flex-direction: column;
+            gap: 0.5rem;
             border-top: 1px solid var(--border);
         }
-        #generationResult h4 {
+        .folder-databases.open {
+            display: flex;
+        }
+        .folder-db-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background: var(--white);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+        .folder-db-name {
+            font-family: monospace;
+            font-weight: bold;
+        }
+        .folder-db-display {
+            color: var(--text-light);
+            font-size: 0.85rem;
+        }
+        .btn-edit {
+            background: none;
+            border: 2px solid var(--primary-light);
+            color: var(--primary);
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            transition: all 0.2s;
+            font-weight: 500;
+            margin-right: 0.5rem;
+        }
+        .btn-edit:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        /* Список баз для управления */
+        .db-manager-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .db-manager-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            background: linear-gradient(135deg, var(--light) 0%, #f3f4f6 100%);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+        .db-manager-item:hover {
+            transform: translateX(4px);
+            border-color: var(--primary);
+            box-shadow: var(--shadow);
+        }
+        .db-manager-item .db-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .db-manager-item .db-name {
+            font-family: monospace;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        .db-manager-item .db-meta {
+            color: var(--text-light);
+            font-size: 0.875rem;
+            background: var(--white);
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+        }
+        .db-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Сессии */
+        .sessions-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .sessions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+        .sessions-table th {
+            background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            position: sticky;
+            top: 0;
+        }
+        .sessions-table td {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .sessions-table tr:hover td {
+            background: var(--primary-light);
+        }
+        .status-badge {
+            padding: 0.2rem 0.5rem;
+            border-radius: 1rem;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+        .status-active {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status-blocked {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .btn-terminate {
+            background: none;
+            border: 1px solid var(--danger);
+            color: var(--danger);
+            cursor: pointer;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.7rem;
+            transition: all 0.2s;
+        }
+        .btn-terminate:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* Модальное окно редактирования */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+        }
+        .modal-content h3 {
             margin-bottom: 1rem;
             color: var(--dark);
         }
-        #studentsTable {
-            font-size: 0.85rem;
+        .form-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
         }
-        #studentsTable td {
-            font-family: monospace;
-            font-size: 0.8rem;
+
+        /* Загрузка схемы */
+        .schema-preview {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--light);
+            border-radius: var(--radius);
+            display: none;
         }
-        .btn-generate {
-            background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
-        }
-        .btn-generate:hover {
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        .schema-preview img {
+            max-width: 100%;
+            border-radius: var(--radius);
+            margin-top: 0.5rem;
         }
     </style>
 </head>
@@ -200,6 +392,45 @@
         </div>
     </div>
 
+    <!-- Модальное окно редактирования базы данных -->
+    <div id="editDatabaseModal" class="modal">
+        <div class="modal-content">
+            <h3>✏️ Редактировать базу данных</h3>
+            <input type="hidden" id="editDbName">
+            <div class="form-group">
+                <label>Отображаемое имя</label>
+                <input type="text" id="editDisplayName" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Папка</label>
+                <select id="editFolderId" class="form-input"></select>
+            </div>
+            <div class="form-group">
+                <label>Пароль доступа (оставьте пустым для сохранения текущего)</label>
+                <input type="password" id="editAccessPassword" class="form-input" placeholder="Новый пароль">
+            </div>
+            <div class="form-group">
+                <label>Видимость для студентов</label>
+                <select id="editIsVisible" class="form-input">
+                    <option value="true">Видима</option>
+                    <option value="false">Скрыта</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Начало доступа (оставьте пустым для безлимита)</label>
+                <input type="date" id="editAccessStart" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Конец доступа (оставьте пустым для безлимита)</label>
+                <input type="date" id="editAccessEnd" class="form-input">
+            </div>
+            <div class="form-buttons">
+                <button class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveDatabaseMetadata()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Навигационная панель -->
     <nav class="navbar">
         <div class="nav-container">
@@ -210,8 +441,6 @@
             <div class="nav-right">
                 <a href="index" class="nav-link">Тренажёр</a>
                 <a href="teacher" class="nav-link active">Панель преподавателя</a>
-                <a href="manageStudents" class="nav-link">Студенты</a>
-                <a href="profile" class="nav-link">Профиль</a>
                 <a href="#" id="logoutBtn" class="nav-link" style="background: rgba(255,255,255,0.2);">Выйти</a>
             </div>
         </div>
@@ -221,581 +450,112 @@
     <main class="container">
         <h2 class="page-title">Панель управления</h2>
 
-        <!-- Карточка загрузки новой базы данных -->
-        <div class="card">
-            <h3 class="card-title">📤 Загрузить новую учебную базу</h3>
-            <form id="uploadForm" class="upload-form" autocomplete="off">
-                <div class="form-group">
-                    <label class="form-label">SQL-скрипт</label>
-                    <div class="file-upload">
-                        <input type="file" id="sqlFile" accept=".sql" class="file-input" onchange="updateFileLabel(this)" required>
-                        <label for="sqlFile" class="file-label" id="fileLabel">
-                            <span class="file-icon">📎</span>
-                            <span id="fileName">Выберите SQL файл</span>
-                        </label>
+        <!-- Вкладки -->
+        <div class="tabs">
+            <button class="tab active" data-tab="databases">🗄️ Базы данных</button>
+            <button class="tab" data-tab="folders">📁 Папки</button>
+            <button class="tab" data-tab="sessions">👀 Активные сессии</button>
+        </div>
+
+        <!-- Вкладка: Базы данных -->
+        <div id="tab-databases" class="tab-content active">
+            <!-- Карточка загрузки новой базы данных -->
+            <div class="card">
+                <h3 class="card-title">📤 Загрузить новую учебную базу</h3>
+                <form id="uploadForm" class="upload-form" autocomplete="off">
+                    <div class="form-group">
+                        <label class="form-label">Название базы данных (латиница, без пробелов)</label>
+                        <input type="text" id="dbName" class="form-input" placeholder="например: my_database" required>
                     </div>
-                    <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 0.25rem;">Максимальный размер: 10 MB</div>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Создать базу данных</button>
-                </div>
-            </form>
-        </div>
-
-        <!-- Карточка генерации студентов -->
-        <div class="card">
-            <h3 class="card-title">👥 Управление студентами</h3>
-            <div class="students-section">
-                <div class="form-group">
-                    <label for="groupName">Название группы</label>
-                    <input type="text" id="groupName" class="form-input" placeholder="Например: ИВТ-221, ПИ-202">
-                </div>
-                <div class="form-group">
-                    <label for="studentCount">Количество студентов</label>
-                    <input type="number" id="studentCount" class="form-input" min="1" max="100" value="5">
-                </div>
-                <button id="generateStudentsBtn" class="btn btn-primary btn-generate">
-                    <span class="btn-icon">🎓</span>
-                    Сгенерировать студентов
-                </button>
+                    <div class="form-group">
+                        <label class="form-label">Папка</label>
+                        <select id="folderSelect" class="form-input" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">SQL-скрипт</label>
+                        <div class="file-upload">
+                            <input type="file" id="sqlFile" accept=".sql" class="file-input" onchange="updateFileLabel(this)" required>
+                            <label for="sqlFile" class="file-label" id="fileLabel">
+                                <span class="file-icon">📎</span>
+                                <span id="fileName">Выберите SQL файл</span>
+                            </label>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 0.25rem;">Максимальный размер: 10 MB</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Отображаемое имя (для студентов)</label>
+                        <input type="text" id="displayName" class="form-input" placeholder="Имя для отображения студентам">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Пароль доступа (оставьте пустым для открытого доступа)</label>
+                        <input type="password" id="accessPassword" class="form-input">
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Создать базу данных</button>
+                    </div>
+                </form>
             </div>
-            <div id="generationResult" style="display: none; margin-top: 1.5rem;">
-                <h4>📊 Сгенерированные студенты</h4>
-                <div class="table-wrapper">
-                    <table id="studentsTable" class="results-table">
-                        <thead>
-                            <tr>
-                                <th>Логин</th>
-                                <th>Пароль</th>
-                                <th>ФИО</th>
-                                <th>Email</th>
-                                <th>Группа</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+
+            <!-- Карточка загрузки схемы базы данных -->
+            <div class="card">
+                <h3 class="card-title">🖼️ Загрузить схему базы данных</h3>
+                <form id="uploadSchemaForm" class="upload-form" autocomplete="off">
+                    <div class="form-group">
+                        <label class="form-label">Выберите базу данных</label>
+                        <select id="schemaDbSelect" class="form-input" required>
+                            <option value="">Выберите базу</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Изображение схемы (JPEG, PNG, GIF)</label>
+                        <div class="file-upload">
+                            <input type="file" id="schemaImage" accept="image/jpeg,image/png,image/gif" class="file-input" onchange="updateSchemaFileLabel(this)" required>
+                            <label for="schemaImage" class="file-label" id="schemaFileLabel">
+                                <span class="file-icon">🖼️</span>
+                                <span id="schemaFileName">Выберите файл схемы</span>
+                            </label>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 0.25rem;">Максимальный размер: 5 MB</div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Загрузить схему</button>
+                    </div>
+                </form>
+                <div id="schemaPreview" class="schema-preview">
+                    <strong>Текущая схема:</strong>
+                    <img id="schemaPreviewImg" src="" alt="Схема базы данных">
                 </div>
-                <button id="downloadExcelBtn" class="btn btn-secondary" style="margin-top: 1rem;">
-                    <span class="btn-icon">📥</span>
-                    Скачать CSV
-                </button>
+            </div>
+
+            <!-- Карточка списка существующих баз данных -->
+            <div class="card">
+                <h3 class="card-title">🗄️ Существующие базы данных</h3>
+                <div class="db-manager-list" id="databasesList"><div class="empty-state">Загрузка...</div></div>
             </div>
         </div>
 
-        <!-- Карточка списка существующих баз данных -->
-        <div class="card">
-            <h3 class="card-title">🗄️ Существующие базы данных</h3>
-            <div class="db-manager-list" id="databasesList"><div class="empty-state">Загрузка...</div></div>
+        <!-- Вкладка: Папки -->
+        <div id="tab-folders" class="tab-content">
+            <div class="card">
+                <h3 class="card-title">📁 Управление папками</h3>
+                <div class="folder-create">
+                    <input type="text" id="newFolderName" class="form-input" placeholder="Название новой папки">
+                    <button id="createFolderBtn" class="btn btn-primary">Создать папку</button>
+                </div>
+                <div class="folders-list" id="foldersList"><div class="empty-state">Загрузка...</div></div>
+            </div>
         </div>
 
-        <!-- Карточка активных сессий студентов -->
-        <div class="card">
-            <h3 class="card-title">👀 Активные сессии студентов</h3>
-            <div class="sessions-list" id="sessionsList"><div class="empty-state">Загрузка...</div></div>
+        <!-- Вкладка: Активные сессии -->
+        <div id="tab-sessions" class="tab-content">
+            <div class="card">
+                <h3 class="card-title">👀 Активные сессии студентов</h3>
+                <div class="sessions-list" id="sessionsList"><div class="empty-state">Загрузка...</div></div>
+            </div>
         </div>
     </main>
 
-    <script>
-        /**
-         * Экранирует HTML-символы для предотвращения XSS-атак
-         */
-        function escapeHtml(text) {
-            if (!text) return '';
-            return text.replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            });
-        }
-
-        /**
-         * Возвращает access token из localStorage
-         */
-        function getAccessToken() {
-            return localStorage.getItem('accessToken');
-        }
-
-        /**
-         * Возвращает данные пользователя из localStorage
-         */
-        function getUser() {
-            try {
-                return JSON.parse(localStorage.getItem('user') || '{}');
-            } catch(e) {
-                return {};
-            }
-        }
-
-        /**
-         * Возвращает заголовок авторизации для fetch-запросов
-         */
-        function getAuthHeader() {
-            const token = getAccessToken();
-            return token ? { 'Authorization': 'Bearer ' + token } : {};
-        }
-
-        /**
-         * Проверка аутентификации и роли преподавателя
-         */
-        (function checkAuth() {
-            const token = getAccessToken();
-            const userData = getUser();
-            if (!token || !userData || userData.role !== 'teacher') {
-                window.location.href = '/login';
-            }
-        })();
-
-        /**
-         * Обработчик кнопки выхода из системы
-         */
-        const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                const token = getAccessToken();
-                if (token) {
-                    fetch('/api/auth/logout', {
-                        method: 'POST',
-                        headers: { 'Authorization': 'Bearer ' + token }
-                    }).catch(function(err) {
-                        console.error('Logout error:', err);
-                    });
-                }
-                localStorage.clear();
-                window.location.href = '/login';
-            });
-        }
-
-        /**
-         * Обновляет отображение выбранного файла в форме загрузки
-         */
-        function updateFileLabel(input) {
-            var fileNameSpan = document.getElementById('fileName');
-            var fileUpload = document.querySelector('.file-upload');
-            if (input.files && input.files.length > 0) {
-                var fileName = input.files[0].name;
-                var fileSize = (input.files[0].size / 1024).toFixed(0);
-                if (fileSize > 1024) {
-                    fileSize = (input.files[0].size / 1024 / 1024).toFixed(2) + ' MB';
-                } else {
-                    fileSize = fileSize + ' KB';
-                }
-                fileNameSpan.textContent = '📄 ' + fileName + ' (' + fileSize + ')';
-                fileUpload.style.borderColor = 'var(--primary)';
-                fileUpload.style.background = 'var(--primary-light)';
-            } else {
-                fileNameSpan.textContent = 'Выберите SQL файл';
-                fileUpload.style.borderColor = 'var(--border)';
-                fileUpload.style.background = 'var(--light)';
-            }
-        }
-
-        /**
-         * Возвращает описание базы данных для отображения
-         */
-        function getDatabaseDescription(dbName) {
-            var descriptions = {
-                'sql_tutor_university_db': '📚 основная учебная база (студенты, курсы)',
-                'db_university': '🏛️ университетская база',
-                'archaeology_10m': '🏺 археология (10 млн записей)'
-            };
-            return descriptions[dbName] || '📁 учебная база';
-        }
-
-        /**
-         * Добавляет сообщение в лог-контейнер
-         */
-        function addLogMessage(message, type) {
-            var logMessages = document.getElementById('logMessages');
-            var logEntry = document.createElement('div');
-            logEntry.className = type || 'info';
-            var time = new Date().toLocaleTimeString();
-            logEntry.textContent = '[' + time + '] ' + message;
-            logMessages.appendChild(logEntry);
-            logMessages.scrollTop = logMessages.scrollHeight;
-        }
-
-        /**
-         * Загружает и отображает список существующих баз данных
-         */
-        function loadDatabases() {
-            fetch('/api/teacher?action=list', { headers: getAuthHeader() })
-                .then(function(response) {
-                    if (response.status === 401) {
-                        localStorage.clear();
-                        window.location.href = '/login';
-                        throw new Error('Unauthorized');
-                    }
-                    return response.json();
-                })
-                .then(function(data) {
-                    var list = document.getElementById('databasesList');
-                    if (data.error) {
-                        list.innerHTML = '<div class="empty-state">Ошибка: ' + data.error + '</div>';
-                        return;
-                    }
-                    if (data.databases && data.databases.length > 0) {
-                        var html = '';
-                        for (var i = 0; i < data.databases.length; i++) {
-                            var db = data.databases[i];
-                            html += '<div class="db-manager-item">' +
-                                        '<div class="db-info">' +
-                                            '<span class="db-name">' + db + '</span>' +
-                                            '<span class="db-meta">' + getDatabaseDescription(db) + '</span>' +
-                                        '</div>' +
-                                        '<button class="btn-delete" onclick="deleteDatabase(\'' + db + '\')">Удалить</button>' +
-                                    '</div>';
-                        }
-                        list.innerHTML = html;
-                    } else {
-                        list.innerHTML = '<div class="empty-state">Нет баз данных</div>';
-                    }
-                })
-                .catch(function(error) {
-                    console.error("Fetch error:", error);
-                    document.getElementById('databasesList').innerHTML = '<div class="empty-state">Ошибка загрузки</div>';
-                });
-        }
-
-        /**
-         * Удаляет базу данных
-         */
-        function deleteDatabase(dbName) {
-            if (dbName === 'sql_tutor_university_db') {
-                if (!confirm('⚠️ Это основная база проекта. Вы уверены, что хотите её удалить?')) return;
-            }
-            if (confirm('Удалить базу данных "' + dbName + '"?')) {
-                var overlay = document.getElementById('loadingOverlay');
-                var progressFill = document.getElementById('progressFill');
-                overlay.style.display = 'flex';
-                progressFill.style.width = '30%';
-                fetch('/api/teacher', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...getAuthHeader() },
-                    body: new URLSearchParams({ 'action': 'delete', 'dbName': dbName })
-                })
-                .then(function(response) { progressFill.style.width = '70%'; return response.json(); })
-                .then(function(data) {
-                    progressFill.style.width = '100%';
-                    setTimeout(function() {
-                        overlay.style.display = 'none';
-                        if (data.success) loadDatabases();
-                        else alert('Ошибка при удалении: ' + (data.error || 'неизвестная ошибка'));
-                    }, 500);
-                })
-                .catch(function(error) { overlay.style.display = 'none'; alert('Ошибка соединения: ' + error); });
-            }
-        }
-
-        /**
-         * Загружает и отображает активные сессии студентов
-         */
-        function loadSessions() {
-            fetch('/api/teacher?action=sessions', { headers: getAuthHeader() })
-                .then(function(response) {
-                    if (response.status === 401) {
-                        localStorage.clear();
-                        window.location.href = '/login';
-                        throw new Error('Unauthorized');
-                    }
-                    return response.json();
-                })
-                .then(function(data) {
-                    var currentUser = getUser();
-                    var currentLogin = currentUser.login;
-
-                    var list = document.getElementById('sessionsList');
-                    if (data.sessions && data.sessions.length > 0) {
-                        var html = '<table class="results-table">';
-                        html += '<thead>';
-                        html += '<tr>';
-                        html += '<th>Студент</th>';
-                        html += '<th>Сессия</th>';
-                        html += '<th>База данных</th>';
-                        html += '<th>Последний запрос</th>';
-                        html += '<th>Время выполнения</th>';
-                        html += '<th>Время запроса</th>';
-                        html += '<th>Статус</th>';
-                        html += '<th>Действия</th>';
-                        html += '</tr>';
-                        html += '</thead>';
-                        html += '<tbody>';
-
-                        for (var i = 0; i < data.sessions.length; i++) {
-                            var s = data.sessions[i];
-                            var time = new Date(s.lastAccess).toLocaleTimeString();
-                            var shortQuery = s.lastQuery && s.lastQuery.length > 50 ? s.lastQuery.substring(0, 50) + '...' : (s.lastQuery || '—');
-
-                            var statusHtml = s.blocked ? '<span style="color: red;">🔴 Заблокирована</span>' : '<span style="color: green;">🟢 Активна</span>';
-
-                            var isOwnSession = (s.login === currentLogin);
-                            var actionHtml = '';
-                            if (s.blocked) {
-                                actionHtml = '<span style="color: gray;">Завершена</span>';
-                            } else if (isOwnSession) {
-                                actionHtml = '<span style="color: gray;" title="Нельзя завершить свою сессию">⚠️ Своя сессия</span>';
-                            } else {
-                                actionHtml = '<button class="btn-terminate" onclick="terminateSession(\'' + s.sessionId + '\')">🔴 Завершить</button>';
-                            }
-
-                            html += '<tr>';
-                            html += '<td style="white-space: nowrap;">' + escapeHtml(s.login || '—') + '</td>';
-                            html += '<td style="font-family: monospace; font-size: 0.75rem;">' + (s.sessionId ? s.sessionId.substring(0, 8) + '...' : '—') + '</td>';
-                            html += '<td style="white-space: nowrap;">' + escapeHtml(s.dbName || '—') + '</td>';
-                            html += '<td title="' + escapeHtml(s.lastQuery || '') + '" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + escapeHtml(shortQuery) + '</td>';
-                            html += '<td style="text-align: center;">' + (s.lastQueryTimeMs || 0) + ' ms</td>';
-                            html += '<td style="white-space: nowrap;">' + time + '</td>';
-                            html += '<td style="text-align: center;">' + statusHtml + '</td>';
-                            html += '<td style="text-align: center;">' + actionHtml + '</td>';
-                            html += '</tr>';
-                        }
-                        html += '</tbody>';
-                        html += '<td>';
-                        list.innerHTML = html;
-                    } else {
-                        list.innerHTML = '<div class="empty-state">Нет активных сессий</div>';
-                    }
-                })
-                .catch(function(error) {
-                    console.error("Sessions fetch error:", error);
-                    document.getElementById('sessionsList').innerHTML = '<div class="empty-state">Ошибка загрузки сессий</div>';
-                });
-        }
-
-        /**
-         * Завершает сессию студента
-         */
-        async function terminateSession(sessionId) {
-            if (!confirm('Завершить сессию студента? Он будет вынужден перезайти в систему.')) {
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/teacher', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'Authorization': 'Bearer ' + getAccessToken()
-                    },
-                    body: new URLSearchParams({
-                        'action': 'terminateSession',
-                        'sessionId': sessionId
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    alert(data.message);
-                    loadSessions();
-                } else {
-                    alert('Ошибка: ' + (data.error || 'Не удалось завершить сессию'));
-                }
-            } catch (error) {
-                console.error('Terminate session error:', error);
-                alert('Ошибка соединения с сервером');
-            }
-        }
-
-        // Инициализация компонентов управления студентами
-        const generateBtn = document.getElementById('generateStudentsBtn');
-        const groupNameInput = document.getElementById('groupName');
-        const studentCountInput = document.getElementById('studentCount');
-        const generationResult = document.getElementById('generationResult');
-        const studentsTableBody = document.querySelector('#studentsTable tbody');
-        const downloadExcelBtn = document.getElementById('downloadExcelBtn');
-        window.generatedStudents = [];
-
-        /**
-         * Обработчик генерации студентов
-         */
-        if (generateBtn) {
-            generateBtn.addEventListener('click', async () => {
-                const groupName = groupNameInput.value.trim();
-                const count = parseInt(studentCountInput.value);
-
-                if (!groupName) {
-                    alert('Введите название группы');
-                    return;
-                }
-
-                if (isNaN(count) || count < 1 || count > 100) {
-                    alert('Количество студентов должно быть от 1 до 100');
-                    return;
-                }
-
-                generateBtn.disabled = true;
-                generateBtn.textContent = '⏳ Генерация...';
-
-                try {
-                    const response = await fetch('/api/teacher/students?action=generate', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'Authorization': 'Bearer ' + getAccessToken()
-                        },
-                        body: new URLSearchParams({
-                            groupName: groupName,
-                            count: count
-                        })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success && data.students && data.students.length > 0) {
-                        studentsTableBody.innerHTML = '';
-                        window.generatedStudents = data.students;
-
-                        for (let i = 0; i < data.students.length; i++) {
-                            const student = data.students[i];
-                            const row = studentsTableBody.insertRow();
-                            row.insertCell(0).textContent = student.login;
-                            row.insertCell(1).textContent = student.password;
-                            row.insertCell(2).textContent = student.fullName;
-                            row.insertCell(3).textContent = student.email;
-                            row.insertCell(4).textContent = student.groupName;
-                        }
-
-                        generationResult.style.display = 'block';
-                        alert('✅ Успешно сгенерировано ' + data.students.length + ' студентов!');
-                    } else {
-                        alert('Ошибка: ' + (data.error || 'Не удалось сгенерировать студентов'));
-                    }
-                } catch (error) {
-                    console.error('Generation error:', error);
-                    alert('Ошибка соединения с сервером');
-                } finally {
-                    generateBtn.disabled = false;
-                    generateBtn.textContent = '🎓 Сгенерировать студентов';
-                }
-            });
-        }
-
-        /**
-         * Обработчик скачивания CSV со сгенерированными студентами
-         */
-        if (downloadExcelBtn) {
-            downloadExcelBtn.addEventListener('click', () => {
-                if (!window.generatedStudents || window.generatedStudents.length === 0) {
-                    alert('Нет данных для скачивания. Сначала сгенерируйте студентов.');
-                    return;
-                }
-
-                let csv = '\uFEFF';
-                csv += 'Логин;Пароль;ФИО;Email;Группа\n';
-
-                for (let i = 0; i < window.generatedStudents.length; i++) {
-                    const s = window.generatedStudents[i];
-                    csv += '"' + (s.login || '') + '";';
-                    csv += '"' + (s.password || '') + '";';
-                    csv += '"' + (s.fullName || '') + '";';
-                    csv += '"' + (s.email || '') + '";';
-                    csv += '"' + (s.groupName || '') + '"\n';
-                }
-
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement('a');
-                const url = URL.createObjectURL(blob);
-                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-                const groupNameForFile = (window.generatedStudents[0].groupName || 'students').replace(/[^a-zA-Z0-9а-яА-Я]/g, '_');
-
-                link.setAttribute('href', url);
-                link.setAttribute('download', 'students_' + groupNameForFile + '_' + timestamp + '.csv');
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-            });
-        }
-
-        /**
-         * Обработчик загрузки SQL-скрипта
-         */
-        document.getElementById('uploadForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            var fileInput = document.getElementById('sqlFile');
-            var file = fileInput.files[0];
-            if (!file) { alert('Выберите SQL файл'); return; }
-
-            var overlay = document.getElementById('loadingOverlay');
-            var progressFill = document.getElementById('progressFill');
-            var loadingText = document.getElementById('loadingText');
-            var loadingStatus = document.getElementById('loadingStatus');
-            var logMessages = document.getElementById('logMessages');
-
-            overlay.style.display = 'flex';
-            progressFill.style.width = '10%';
-            loadingText.textContent = 'Загрузка базы данных...';
-            loadingStatus.textContent = 'Отправка файла...';
-            logMessages.innerHTML = '';
-            addLogMessage('Начало загрузки файла: ' + file.name, 'info');
-
-            var formData = new FormData();
-            formData.append('action', 'upload');
-            formData.append('sqlFile', file);
-
-            // Подключение к потоку логов через Server-Sent Events
-            var eventSource = new EventSource('/api/logs');
-            eventSource.onmessage = function(event) {
-                try {
-                    var data = JSON.parse(event.data);
-                    if (data.type === 'start') addLogMessage('Начало выполнения скрипта. Всего запросов: ' + data.total, 'info');
-                    else if (data.type === 'progress') {
-                        var percent = Math.round((data.current / data.total) * 100);
-                        progressFill.style.width = percent + '%';
-                        loadingStatus.textContent = 'Выполнение: ' + percent + '% (' + data.current + '/' + data.total + ')';
-                        addLogMessage('▶ ' + data.query, 'info');
-                    } else if (data.type === 'success') addLogMessage('✅ ' + data.message, 'success');
-                    else if (data.type === 'error') addLogMessage('❌ Ошибка: ' + data.error, 'error');
-                    else if (data.type === 'complete') { addLogMessage('🎉 ' + data.message, 'success'); setTimeout(function() { eventSource.close(); }, 2000); }
-                } catch (e) { addLogMessage(event.data, 'info'); }
-            };
-            eventSource.onerror = function() { addLogMessage('⚠️ Соединение с сервером логов закрыто', 'warning'); eventSource.close(); };
-
-            var xhr = new XMLHttpRequest();
-            xhr.upload.addEventListener('progress', function(e) {
-                if (e.lengthComputable) {
-                    var percent = (e.loaded / e.total) * 100;
-                    progressFill.style.width = percent + '%';
-                    loadingStatus.textContent = 'Загрузка файла: ' + Math.round(percent) + '%';
-                }
-            });
-            xhr.addEventListener('load', function() {
-                if (xhr.status === 200) {
-                    try {
-                        var data = JSON.parse(xhr.responseText);
-                        if (data.success) {
-                            progressFill.style.width = '100%';
-                            loadingText.textContent = 'Готово!';
-                            loadingStatus.textContent = 'База данных успешно создана';
-                            addLogMessage('✅ База данных успешно создана!', 'success');
-                            setTimeout(function() {
-                                overlay.style.display = 'none';
-                                document.getElementById('uploadForm').reset();
-                                document.getElementById('fileName').textContent = 'Выберите SQL файл';
-                                loadDatabases();
-                            }, 2000);
-                        } else {
-                            overlay.style.display = 'none';
-                            addLogMessage('❌ Ошибка: ' + data.error, 'error');
-                            alert('Ошибка: ' + data.error);
-                        }
-                    } catch (e) { overlay.style.display = 'none'; alert('Ошибка при обработке ответа сервера'); }
-                } else { overlay.style.display = 'none'; alert('Ошибка соединения: ' + xhr.status); }
-            });
-            xhr.addEventListener('error', function() { overlay.style.display = 'none'; alert('Ошибка соединения'); });
-            xhr.open('POST', '/api/teacher', true);
-            xhr.setRequestHeader('Authorization', 'Bearer ' + getAccessToken());
-            xhr.send(formData);
-        });
-
-        // Загрузка начальных данных
-        loadDatabases();
-        loadSessions();
-        // Автообновление списка сессий каждые 5 секунд
-        setInterval(loadSessions, 5000);
-    </script>
+    <!-- JavaScript вынесен в отдельный файл для избежания конфликтов с JSP компилятором -->
+    <script src="/js/teacher.js?v=2"></script>
 </body>
 </html>

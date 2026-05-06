@@ -35,18 +35,20 @@ if not exist .env (
         echo DB_STUDENT_USER=students
         echo DB_STUDENT_PASSWORD=student_pass
         echo.
-        echo # Security
-        echo JWT_SECRET=sql-trainer-super-secret-key-2024-must-be-at-least-256-bits-long
+        echo # Teacher authentication
+        echo TEACHER_PASSWORD=teacher123
         echo.
         echo # Limits
         echo QUERY_TIMEOUT_SEC=3
         echo MAX_ROWS=1000
         echo CONNECTION_TIMEOUT_MS=5000
         echo.
-        echo # JWT Settings
-        echo JWT_ACCESS_TOKEN_EXPIRY_HOURS=1
-        echo JWT_REFRESH_TOKEN_EXPIRY_DAYS=7
-        echo JWT_INACTIVE_TIMEOUT_HOURS=3
+        echo # Concurrency limits
+        echo MAX_CONCURRENT_QUERIES=10
+        echo SEMAPHORE_TIMEOUT_SEC=30
+        echo.
+        echo # Logging
+        echo LOG_LEVEL=INFO
     ) > .env
     echo [OK] Файл .env создан
     echo.
@@ -126,13 +128,13 @@ if /i "!REMOVE_DATA!"=="Y" (
     timeout /t 5 /nobreak >nul
 )
 
-REM Выполнение скрипта авторизации
-echo [5/5] Настройка таблиц авторизации...
-docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_auth.sql 2>nul
+REM Выполнение скрипта настройки метаданных (папки, права доступа, сессии)
+echo [5/5] Настройка метаданных баз данных...
+docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_metadata.sql 2>nul
 if !errorlevel! neq 0 (
-    echo [WARN] Не удалось выполнить setup_auth.sql
+    echo [WARN] Не удалось выполнить setup_metadata.sql
 ) else (
-    echo [OK] Таблицы авторизации созданы
+    echo [OK] Таблицы метаданных созданы
 )
 
 REM Выполнение скрипта учебных баз (только если данные были удалены)
@@ -162,8 +164,8 @@ echo    РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО
 echo ========================================
 echo.
 echo [i] Приложение: http://localhost:8081
-echo [i] Страница входа: http://localhost:8081/login.jsp
-echo [i] Логин преподавателя: teacher
+echo [i] Страница тренажёра: http://localhost:8081/index
+echo [i] Панель преподавателя: http://localhost:8081/teacher
 echo [i] Пароль преподавателя: teacher123
 echo.
 
