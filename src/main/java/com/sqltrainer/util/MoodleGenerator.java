@@ -54,7 +54,7 @@ public class MoodleGenerator {
             }
 
             if (lines.size() % 2 != 0) {
-                throw new IOException("File must contain pairs of lines: question text and SQL query");
+                throw new IOException("Файл должен содержать пары строк: текст вопроса и SQL запрос");
             }
 
             for (int i = 0; i < lines.size(); i += 2) {
@@ -62,7 +62,7 @@ public class MoodleGenerator {
                 String sqlQuery = lines.get(i + 1);
 
                 if (sqlQuery.isEmpty()) {
-                    throw new IOException("SQL query cannot be empty for question: " + questionText);
+                    throw new IOException("SQL запрос не может быть пустым для вопроса: " + questionText);
                 }
 
                 questions.add(new Question(questionText, sqlQuery));
@@ -101,7 +101,7 @@ public class MoodleGenerator {
                     }
                 } else {
                     int affectedRows = stmt.executeUpdate(q.getQuery());
-                    q.setExpectedResult("Affected rows: " + affectedRows);
+                    q.setExpectedResult("Затронуто строк: " + affectedRows);
                 }
 
                 log.debug("Executed query for question: {}", q.getText());

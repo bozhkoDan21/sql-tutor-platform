@@ -45,14 +45,14 @@ public class DatabaseVerifyServlet extends HttpServlet {
 
         if (dbName == null || dbName.isEmpty()) {
             response.put("success", false);
-            response.put("error", "Database name is required");
+            response.put("error", "Не указано имя базы данных");  // ✅ Исправлено
             resp.getWriter().write(gson.toJson(response));
             return;
         }
 
         if (password == null || password.isEmpty()) {
             response.put("success", false);
-            response.put("error", "Password is required");
+            response.put("error", "Требуется пароль");
             resp.getWriter().write(gson.toJson(response));
             return;
         }
@@ -72,7 +72,7 @@ public class DatabaseVerifyServlet extends HttpServlet {
                     // Если пароль не установлен (NULL), доступ открыт
                     if (passwordHash == null || passwordHash.isEmpty()) {
                         response.put("success", true);
-                        response.put("message", "Access granted (no password)");
+                        response.put("message", "Доступ открыт (пароль не установлен)");  // ✅ Исправлено
                         saveAuthorizedDatabase(req, dbName);
                         resp.getWriter().write(gson.toJson(response));
                         return;
@@ -81,23 +81,23 @@ public class DatabaseVerifyServlet extends HttpServlet {
                     // Проверяем пароль
                     if (BCrypt.checkpw(password, passwordHash)) {
                         response.put("success", true);
-                        response.put("message", "Access granted");
+                        response.put("message", "Доступ разрешён");
                         saveAuthorizedDatabase(req, dbName);
                         log.info("Database {} access granted", dbName);
                     } else {
                         response.put("success", false);
-                        response.put("error", "Invalid password");
+                        response.put("error", "Неверный пароль");
                         log.warn("Failed password attempt for database {}", dbName);
                     }
                 } else {
                     response.put("success", false);
-                    response.put("error", "Database not found");
+                    response.put("error", "База данных не найдена");
                 }
             }
         } catch (SQLException e) {
             log.error("Failed to verify database password: {}", e.getMessage());
             response.put("success", false);
-            response.put("error", "Database error: " + e.getMessage());
+            response.put("error", "Ошибка базы данных: " + e.getMessage());
         }
 
         resp.getWriter().write(gson.toJson(response));

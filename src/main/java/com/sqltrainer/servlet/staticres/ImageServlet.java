@@ -34,7 +34,7 @@ public class ImageServlet extends HttpServlet {
         }
 
         if (!file.exists()) {
-            resp.sendError(404, "Image not found: " + fileName);
+            resp.sendError(404, "Изображение не найдено: " + fileName);
             return;
         }
 

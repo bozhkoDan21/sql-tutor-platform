@@ -49,7 +49,7 @@ public class DatabaseListServlet extends HttpServlet {
         } catch (SQLException e) {
             log.error("Failed to list databases: {}", e.getMessage());
             response.put("success", false);
-            response.put("error", "Failed to load databases: " + e.getMessage());
+            response.put("error", "Не удалось загрузить список баз данных: " + e.getMessage());
 
             // При ошибке подключения очищаем кеш
             QueryExecutor.clearCache();

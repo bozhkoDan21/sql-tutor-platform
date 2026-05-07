@@ -1,6 +1,7 @@
 package com.sqltrainer.servlet.auth;
 
 import com.google.gson.Gson;
+import com.sqltrainer.util.CsrfTokenManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,7 +23,6 @@ public class LoginServlet extends HttpServlet {
     private static final Logger log = LoggerFactory.getLogger(LoginServlet.class);
     private final Gson gson = new Gson();
 
-    // Пароль преподавателя из переменных окружения
     private static final String TEACHER_PASSWORD = System.getenv().getOrDefault("TEACHER_PASSWORD", "teacher123");
 
     @Override
@@ -39,7 +39,7 @@ public class LoginServlet extends HttpServlet {
 
         if (password == null || password.isEmpty()) {
             response.put("success", false);
-            response.put("error", "Password is required");
+            response.put("error", "Требуется пароль");
             resp.getWriter().write(gson.toJson(response));
             return;
         }
@@ -47,14 +47,18 @@ public class LoginServlet extends HttpServlet {
         if (TEACHER_PASSWORD.equals(password)) {
             HttpSession session = req.getSession(true);
             session.setAttribute("authenticated", true);
-            session.setMaxInactiveInterval(3600); // 1 час
+            session.setMaxInactiveInterval(3600);
+
+            // Генерируем CSRF-токен для сессии
+            String csrfToken = CsrfTokenManager.generateToken(session);
 
             response.put("success", true);
-            response.put("message", "Login successful");
+            response.put("message", "Вход выполнен успешно");
+            response.put("csrfToken", csrfToken);
             log.info("Teacher logged in successfully");
         } else {
             response.put("success", false);
-            response.put("error", "Invalid password");
+            response.put("error", "Неверный пароль");
             log.warn("Failed login attempt with wrong password");
         }
 
@@ -63,7 +67,6 @@ public class LoginServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        // Проверка статуса аутентификации
         resp.setContentType("application/json");
         resp.setCharacterEncoding("UTF-8");
 

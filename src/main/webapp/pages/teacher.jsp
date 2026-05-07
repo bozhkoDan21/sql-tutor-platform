@@ -8,6 +8,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
+    <meta name="csrf-token" content="">
     <title>SQL Trainer - Панель преподавателя</title>
     <link rel="stylesheet" href="/css/style.css?v=2">
     <style>
@@ -397,6 +398,7 @@
         <div class="modal-content">
             <h3>✏️ Редактировать базу данных</h3>
             <input type="hidden" id="editDbName">
+            <input type="hidden" name="csrf_token" id="editCsrfToken" value="">
             <div class="form-group">
                 <label>Отображаемое имя</label>
                 <input type="text" id="editDisplayName" class="form-input">
@@ -467,6 +469,7 @@
             <div class="card">
                 <h3 class="card-title">📤 Загрузить новую учебную базу</h3>
                 <form id="uploadForm" class="upload-form" autocomplete="off">
+                    <input type="hidden" name="csrf_token" id="csrfTokenField1" value="">
                     <div class="form-group">
                         <label class="form-label">Название базы данных (латиница, без пробелов)</label>
                         <input type="text" id="dbName" class="form-input" placeholder="например: my_database" required>
@@ -504,6 +507,7 @@
             <div class="card">
                 <h3 class="card-title">🖼️ Загрузить схему базы данных</h3>
                 <form id="uploadSchemaForm" class="upload-form" autocomplete="off">
+                    <input type="hidden" name="csrf_token" id="csrfTokenField2" value="">
                     <div class="form-group">
                         <label class="form-label">Выберите базу данных</label>
                         <select id="schemaDbSelect" class="form-input" required>
@@ -535,6 +539,7 @@
             <div class="card">
                 <h3 class="card-title">📚 Генерация вопросов для Moodle</h3>
                 <form id="moodleForm" class="upload-form" autocomplete="off">
+                    <input type="hidden" name="csrf_token" id="csrfTokenField3" value="">
                     <div class="form-group">
                         <label class="form-label">Выберите базу данных</label>
                         <select id="moodleDbSelect" class="form-input" required>
@@ -601,7 +606,7 @@
         </div>
     </main>
 
-    <!-- JavaScript вынесен в отдельный файл для избежания конфликтов с JSP компилятором -->
-    <script src="/js/teacher.js?v=2"></script>
+    <!-- Подключение JavaScript -->
+    <script src="/js/teacher.js?v=3"></script>
 </body>
 </html>

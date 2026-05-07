@@ -1,10 +1,10 @@
 package com.sqltrainer.filter;
 
+import com.sqltrainer.util.CsrfTokenManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.*;
-import javax.servlet.annotation.WebFilter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
@@ -13,9 +13,8 @@ import java.io.IOException;
 /**
  * Фильтр для ограничения доступа к API преподавателя.
  * Проверяет наличие аутентифицированной сессии преподавателя.
+ * Также генерирует CSRF-токен для защиты от атак.
  */
-@WebFilter({"/api/teacher/*"})  // Только API, JSP страницы не трогаем
-@SuppressWarnings("unused")  // Класс используется через аннотацию @WebFilter
 public class TeacherFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(TeacherFilter.class);
@@ -40,7 +39,7 @@ public class TeacherFilter implements Filter {
             resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             resp.setContentType("application/json");
             resp.setCharacterEncoding("UTF-8");
-            resp.getWriter().write("{\"error\":\"Unauthorized. Please login as teacher.\"}");
+            resp.getWriter().write("{\"error\":\"Неавторизованный доступ. Пожалуйста, войдите как преподаватель.\"}");
             return;
         }
 
@@ -50,8 +49,13 @@ public class TeacherFilter implements Filter {
             resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             resp.setContentType("application/json");
             resp.setCharacterEncoding("UTF-8");
-            resp.getWriter().write("{\"error\":\"Invalid session. Please login again.\"}");
+            resp.getWriter().write("{\"error\":\"Недействительная сессия. Пожалуйста, войдите снова.\"}");
             return;
+        }
+
+        // Генерируем CSRF-токен, если его ещё нет в сессии
+        if (session.getAttribute("csrfToken") == null) {
+            CsrfTokenManager.generateToken(session);
         }
 
         chain.doFilter(request, response);

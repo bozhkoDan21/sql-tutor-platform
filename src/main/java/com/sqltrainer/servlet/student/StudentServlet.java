@@ -174,17 +174,17 @@ public class StudentServlet extends HttpServlet {
         boolean needExplain = explainParam == null || "true".equals(explainParam);
 
         if (dbName == null || dbName.isEmpty()) {
-            resp.getWriter().write("{\"error\":\"Database name is required\"}");
+            resp.getWriter().write("{\"error\":\"Не указано имя базы данных\"}");
             return;
         }
 
         if (query == null || query.isEmpty()) {
-            resp.getWriter().write("{\"error\":\"Query is required\"}");
+            resp.getWriter().write("{\"error\":\"Не указан SQL запрос\"}");
             return;
         }
 
         if (query.length() > Constants.MAX_QUERY_LENGTH) {
-            resp.getWriter().write("{\"error\":\"Query too long (max 10000 characters)\"}");
+            resp.getWriter().write("{\"error\":\"Запрос слишком длинный (максимум 10000 символов)\"}");
             return;
         }
 
@@ -205,7 +205,7 @@ public class StudentServlet extends HttpServlet {
             SessionInfo existing = activeSessions.get(sessionId);
             if (existing != null && existing.isBlocked()) {
                 log.warn("Blocked session {} attempted to execute query from IP {}", sessionId, ipAddress);
-                resp.getWriter().write("{\"error\":\"Your session has been terminated by teacher. Please re-login.\"}");
+                resp.getWriter().write("{\"error\":\"Ваша сессия была завершена преподавателем. Пожалуйста, войдите снова.\"}");
                 return;
             }
         }
@@ -213,21 +213,21 @@ public class StudentServlet extends HttpServlet {
         // Проверка прав доступа к базе данных
         if (!isDatabaseAccessible(dbName, isTeacher)) {
             log.warn("User from IP {} attempted to access unauthorized database: {}", ipAddress, dbName);
-            resp.getWriter().write("{\"error\":\"Access denied to database: " + dbName + "\"}");
+            resp.getWriter().write("{\"error\":\"Доступ к базе данных запрещён: " + dbName + "\"}");
             return;
         }
 
         // Для студентов: дополнительная проверка пароля
         if (!isTeacher && isDatabasePasswordProtected(dbName) && !isAuthorizedForDatabase(req, dbName)) {
             log.warn("User from IP {} attempted to access password-protected database without auth: {}", ipAddress, dbName);
-            resp.getWriter().write("{\"error\":\"Password required for database: " + dbName + "\"}");
+            resp.getWriter().write("{\"error\":\"Требуется пароль для доступа к базе: " + dbName + "\"}");
             return;
         }
 
         // Для студентов: проверка, что запрос начинается с SELECT
         if (!isTeacher && !query.trim().toLowerCase().startsWith("select")) {
             log.warn("Student from IP {} attempted to execute non-SELECT query: {}", ipAddress, query);
-            resp.getWriter().write("{\"error\":\"Only SELECT queries are allowed for students\"}");
+            resp.getWriter().write("{\"error\":\"Для студентов разрешены только SELECT запросы\"}");
             return;
         }
 

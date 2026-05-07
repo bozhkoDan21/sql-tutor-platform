@@ -44,7 +44,7 @@ public class ViewResolverServlet extends HttpServlet {
         try {
             req.getRequestDispatcher(jspPage).forward(req, resp);
         } catch (Exception e) {
-            resp.sendError(404, "Page not found: " + jspPage);
+            resp.sendError(404, "Страница не найдена: " + jspPage);
         }
     }
 }

@@ -131,7 +131,7 @@ public class QueryExecutor {
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return errorResult("Query was interrupted");
+            return errorResult("Запрос был прерван");
         } finally {
             if (acquired) {
                 querySemaphore.release();
@@ -141,7 +141,7 @@ public class QueryExecutor {
 
     private static QueryResult executeAsStudentInternal(String dbName, String sql, boolean needExplain) {
         if (sql == null || sql.trim().isEmpty()) {
-            return errorResult("Query is empty");
+            return errorResult("Запрос пуст");
         }
 
         String sqlTrimmed = sql.trim();
@@ -156,7 +156,7 @@ public class QueryExecutor {
         }
 
         if (lastSelect == null) {
-            return errorResult("No SELECT query found. Only SELECT queries are allowed.");
+            return errorResult("Не найден SELECT запрос. Разрешены только SELECT запросы.");
         }
 
         if (statements.length > 1 && log.isDebugEnabled()) {
@@ -172,7 +172,7 @@ public class QueryExecutor {
 
         if (containsDangerousPatterns(sqlLower)) {
             log.warn("Blocked potentially dangerous query: {}", sql);
-            return errorResult("Query contains prohibited patterns (DELETE, UPDATE, DROP, etc.)");
+            return errorResult("Запрос содержит запрещённые команды (DELETE, UPDATE, DROP и т.д.)");
         }
 
         String cacheKey = dbName + ":" + sql + ":explain=" + needExplain;
@@ -298,16 +298,16 @@ public class QueryExecutor {
     private static String handleSQLError(SQLException e) {
         String msg = e.getMessage().toLowerCase();
         if (msg.contains("timeout") || msg.contains("statement timeout")) {
-            return "Query timeout exceeded (" + DatabaseConfig.getQueryTimeout() + " seconds)";
+            return "Превышен таймаут запроса (" + DatabaseConfig.getQueryTimeout() + " секунд)";
         }
         if (msg.contains("permission denied")) {
-            return "Permission denied (only SELECT queries are allowed)";
+            return "Доступ запрещён (разрешены только SELECT запросы)";
         }
         if (msg.contains("syntax error")) {
-            return "SQL syntax error: " + e.getMessage();
+            return "Синтаксическая ошибка SQL: " + e.getMessage();
         }
         if (msg.contains("multiple resultsets")) {
-            return "Multiple queries detected. Only the last SELECT query will be executed.";
+            return "Обнаружено несколько запросов. Будет выполнен только последний SELECT запрос.";
         }
         return e.getMessage();
     }
@@ -337,7 +337,7 @@ public class QueryExecutor {
      */
     public static QueryResult executeAsTeacher(String dbName, String sql, boolean needExplain) {
         if (sql == null || sql.trim().isEmpty()) {
-            return errorResult("Query is empty");
+            return errorResult("Запрос пуст");
         }
 
         long startTime = System.currentTimeMillis();

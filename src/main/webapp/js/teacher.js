@@ -11,6 +11,49 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Глобальная переменная для CSRF-токена
+let csrfToken = null;
+
+// Загрузка CSRF-токена с сервера
+async function loadCsrfToken() {
+    try {
+        const response = await fetch('/api/csrf/token');
+        const data = await response.json();
+        if (data.success) {
+            csrfToken = data.token;
+            document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+                input.value = csrfToken;
+            });
+            console.log('CSRF token loaded');
+            return true;
+        }
+    } catch (error) {
+        console.error('Failed to load CSRF token:', error);
+    }
+    return false;
+}
+
+// Получение CSRF-токена (вызывается из страницы)
+window.setCsrfToken = function(token) {
+    csrfToken = token;
+};
+
+// Функция для добавления CSRF-токена в FormData или URLSearchParams
+function addCsrfToFormData(formData) {
+    if (csrfToken) {
+        formData.append('csrf_token', csrfToken);
+    }
+    return formData;
+}
+
+// Функция для добавления CSRF-токена в URLSearchParams
+function addCsrfToParams(params) {
+    if (csrfToken) {
+        params.append('csrf_token', csrfToken);
+    }
+    return params;
+}
+
 // Проверка аутентификации
 (async function checkAuth() {
     try {
@@ -202,11 +245,16 @@ document.getElementById('createFolderBtn').addEventListener('click', async () =>
         return;
     }
 
+    const params = new URLSearchParams();
+    params.append('action', 'createFolder');
+    params.append('folderName', folderName);
+    if (csrfToken) params.append('csrf_token', csrfToken);
+
     try {
         const response = await fetch('/api/teacher', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ action: 'createFolder', folderName: folderName })
+            body: params
         });
         const data = await response.json();
         if (data.success) {
@@ -284,71 +332,83 @@ async function loadDatabasesForSchemaSelect() {
 }
 
 // Показ предпросмотра схемы при выборе базы
-document.getElementById('schemaDbSelect')?.addEventListener('change', function() {
-    const selectedOption = this.options[this.selectedIndex];
-    const schemaUrl = selectedOption.dataset.schemaUrl;
-    const previewContainer = document.getElementById('schemaPreview');
-    const previewImg = document.getElementById('schemaPreviewImg');
-    if (schemaUrl && schemaUrl !== 'null' && schemaUrl !== '') {
-        previewImg.src = schemaUrl;
-        previewContainer.style.display = 'block';
-    } else {
-        previewContainer.style.display = 'none';
-    }
-});
+const schemaSelect = document.getElementById('schemaDbSelect');
+if (schemaSelect) {
+    schemaSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const schemaUrl = selectedOption.dataset.schemaUrl;
+        const previewContainer = document.getElementById('schemaPreview');
+        const previewImg = document.getElementById('schemaPreviewImg');
+        if (schemaUrl && schemaUrl !== 'null' && schemaUrl !== '') {
+            previewImg.src = schemaUrl;
+            previewContainer.style.display = 'block';
+        } else {
+            previewContainer.style.display = 'none';
+        }
+    });
+}
 
 // Загрузка схемы
-document.getElementById('uploadSchemaForm')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
+const uploadSchemaForm = document.getElementById('uploadSchemaForm');
+if (uploadSchemaForm) {
+    uploadSchemaForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
 
-    const dbName = document.getElementById('schemaDbSelect').value;
-    const fileInput = document.getElementById('schemaImage');
-    const file = fileInput.files[0];
+        const dbName = document.getElementById('schemaDbSelect').value;
+        const fileInput = document.getElementById('schemaImage');
+        const file = fileInput.files[0];
 
-    if (!dbName) {
-        alert('Выберите базу данных');
-        return;
-    }
-    if (!file) {
-        alert('Выберите файл изображения');
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('action', 'uploadSchema');
-    formData.append('dbName', dbName);
-    formData.append('schemaImage', file);
-
-    try {
-        const response = await fetch('/api/teacher', {
-            method: 'POST',
-            body: formData
-        });
-        const data = await response.json();
-        if (data.success) {
-            alert('Схема успешно загружена');
-            loadDatabasesList();
-            loadFoldersList();
-            loadDatabasesForSchemaSelect();
-            fileInput.value = '';
-            updateSchemaFileLabel(fileInput);
-        } else {
-            alert('Ошибка: ' + data.error);
+        if (!dbName) {
+            alert('Выберите базу данных');
+            return;
         }
-    } catch (e) {
-        alert('Ошибка соединения');
-    }
-});
+        if (!file) {
+            alert('Выберите файл изображения');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('action', 'uploadSchema');
+        formData.append('dbName', dbName);
+        formData.append('schemaImage', file);
+        if (csrfToken) formData.append('csrf_token', csrfToken);
+
+        try {
+            const response = await fetch('/api/teacher', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert('Схема успешно загружена');
+                loadDatabasesList();
+                loadFoldersList();
+                loadDatabasesForSchemaSelect();
+                fileInput.value = '';
+                updateSchemaFileLabel(fileInput);
+            } else {
+                alert('Ошибка: ' + data.error);
+            }
+        } catch (e) {
+            alert('Ошибка соединения');
+        }
+    });
+}
 
 // Удаление базы данных
 window.deleteDatabase = async function(dbName) {
     if (!confirm('Удалить базу данных "' + dbName + '"? Это действие необратимо.')) return;
 
+    const params = new URLSearchParams();
+    params.append('action', 'delete');
+    params.append('dbName', dbName);
+    if (csrfToken) params.append('csrf_token', csrfToken);
+
     try {
         const response = await fetch('/api/teacher', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ action: 'delete', dbName: dbName })
+            body: params
         });
         const data = await response.json();
         if (data.success) {
@@ -382,6 +442,12 @@ window.editDatabase = function(dbName, displayName, folderId, isVisible, accessS
     document.getElementById('editAccessStart').value = accessStart || '';
     document.getElementById('editAccessEnd').value = accessEnd || '';
 
+    // Устанавливаем CSRF-токен в модальное окно
+    const editCsrfField = document.getElementById('editCsrfToken');
+    if (editCsrfField && csrfToken) {
+        editCsrfField.value = csrfToken;
+    }
+
     fetch('/api/teacher?action=listFolders')
         .then(response => response.json())
         .then(data => {
@@ -410,12 +476,12 @@ window.editDatabase = function(dbName, displayName, folderId, isVisible, accessS
 };
 
 // Закрытие модального окна
-function closeEditModal() {
+window.closeEditModal = function() {
     document.getElementById('editDatabaseModal').style.display = 'none';
-}
+};
 
 // Сохранение метаданных базы данных
-async function saveDatabaseMetadata() {
+window.saveDatabaseMetadata = async function() {
     const dbName = document.getElementById('editDbName').value;
     const displayName = document.getElementById('editDisplayName').value;
     const folderId = document.getElementById('editFolderId').value;
@@ -430,6 +496,7 @@ async function saveDatabaseMetadata() {
     formData.append('dbName', dbName);
     if (displayName) formData.append('displayName', displayName);
     if (folderId) formData.append('folderId', folderId);
+    if (csrfToken) formData.append('csrf_token', csrfToken);
 
     if (removePassword) {
         formData.append('removePassword', 'true');
@@ -462,7 +529,7 @@ async function saveDatabaseMetadata() {
     } catch (e) {
         alert('Ошибка соединения');
     }
-}
+};
 
 // ============================================
 // МОНИТОРИНГ СЕССИЙ
@@ -521,11 +588,16 @@ async function loadSessions() {
 window.terminateSession = async function(sessionId) {
     if (!confirm('Заблокировать сессию студента?')) return;
 
+    const params = new URLSearchParams();
+    params.append('action', 'terminateSession');
+    params.append('sessionId', sessionId);
+    if (csrfToken) params.append('csrf_token', csrfToken);
+
     try {
         const response = await fetch('/api/teacher', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ action: 'terminateSession', sessionId: sessionId })
+            body: params
         });
         const data = await response.json();
         if (data.success) {
@@ -543,11 +615,16 @@ window.terminateSession = async function(sessionId) {
 window.unblockSession = async function(sessionId) {
     if (!confirm('Разблокировать сессию студента?')) return;
 
+    const params = new URLSearchParams();
+    params.append('action', 'unblockSession');
+    params.append('sessionId', sessionId);
+    if (csrfToken) params.append('csrf_token', csrfToken);
+
     try {
         const response = await fetch('/api/teacher', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ action: 'unblockSession', sessionId: sessionId })
+            body: params
         });
         const data = await response.json();
         if (data.success) {
@@ -626,6 +703,7 @@ if (moodleForm) {
         formData.append('category', category);
         formData.append('format', format);
         formData.append('questionsFile', file);
+        if (csrfToken) formData.append('csrf_token', csrfToken);
 
         const resultDiv = document.getElementById('moodleResult');
         resultDiv.style.display = 'block';
@@ -668,133 +746,137 @@ if (moodleForm) {
 // ЗАГРУЗКА SQL-СКРИПТА
 // ============================================
 
-document.getElementById('uploadForm').addEventListener('submit', function(e) {
-    e.preventDefault();
+const uploadForm = document.getElementById('uploadForm');
+if (uploadForm) {
+    uploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
 
-    const dbName = document.getElementById('dbName').value.trim();
-    const folderId = document.getElementById('folderSelect').value;
-    const displayName = document.getElementById('displayName').value.trim();
-    const accessPassword = document.getElementById('accessPassword').value;
-    const fileInput = document.getElementById('sqlFile');
-    const file = fileInput.files[0];
+        const dbName = document.getElementById('dbName').value.trim();
+        const folderId = document.getElementById('folderSelect').value;
+        const displayName = document.getElementById('displayName').value.trim();
+        const accessPassword = document.getElementById('accessPassword').value;
+        const fileInput = document.getElementById('sqlFile');
+        const file = fileInput.files[0];
 
-    if (!dbName) {
-        alert('Введите название базы данных');
-        return;
-    }
-    if (!folderId) {
-        alert('Выберите папку');
-        return;
-    }
-    if (!file) {
-        alert('Выберите SQL файл');
-        return;
-    }
-
-    const overlay = document.getElementById('loadingOverlay');
-    const progressFill = document.getElementById('progressFill');
-    const loadingStatus = document.getElementById('loadingStatus');
-    const logMessages = document.getElementById('logMessages');
-
-    overlay.style.display = 'flex';
-    progressFill.style.width = '10%';
-    loadingStatus.textContent = 'Отправка файла...';
-    logMessages.innerHTML = '';
-    addLogMessage('Начало загрузки файла: ' + file.name, 'info');
-
-    const formData = new FormData();
-    formData.append('action', 'upload');
-    formData.append('dbName', dbName);
-    formData.append('sqlFile', file);
-    if (displayName) formData.append('displayName', displayName);
-    if (accessPassword) formData.append('accessPassword', accessPassword);
-    if (folderId) formData.append('folderId', folderId);
-
-    const eventSource = new EventSource('/api/logs');
-    eventSource.onmessage = function(event) {
-        try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'start') {
-                addLogMessage('Начало выполнения скрипта. Всего запросов: ' + data.total, 'info');
-            } else if (data.type === 'progress') {
-                const percent = Math.round((data.current / data.total) * 100);
-                progressFill.style.width = percent + '%';
-                loadingStatus.textContent = 'Выполнение: ' + percent + '% (' + data.current + '/' + data.total + ')';
-                addLogMessage('▶ ' + (data.query || 'Выполнение запроса...'), 'info');
-            } else if (data.type === 'success') {
-                addLogMessage('✅ ' + data.message, 'success');
-            } else if (data.type === 'error') {
-                addLogMessage('❌ Ошибка: ' + data.error, 'error');
-            } else if (data.type === 'complete') {
-                addLogMessage('🎉 ' + data.message, 'success');
-                setTimeout(() => eventSource.close(), 2000);
-            }
-        } catch (e) {
-            addLogMessage(event.data, 'info');
+        if (!dbName) {
+            alert('Введите название базы данных');
+            return;
         }
-    };
-    eventSource.onerror = function() {
-        addLogMessage('⚠️ Соединение с сервером логов закрыто', 'warning');
-        eventSource.close();
-    };
-
-    const xhr = new XMLHttpRequest();
-    xhr.upload.addEventListener('progress', function(e) {
-        if (e.lengthComputable) {
-            const percent = (e.loaded / e.total) * 100;
-            progressFill.style.width = percent + '%';
-            loadingStatus.textContent = 'Загрузка файла: ' + Math.round(percent) + '%';
+        if (!folderId) {
+            alert('Выберите папку');
+            return;
         }
-    });
-    xhr.addEventListener('load', function() {
-        if (xhr.status === 200) {
+        if (!file) {
+            alert('Выберите SQL файл');
+            return;
+        }
+
+        const overlay = document.getElementById('loadingOverlay');
+        const progressFill = document.getElementById('progressFill');
+        const loadingStatus = document.getElementById('loadingStatus');
+        const logMessages = document.getElementById('logMessages');
+
+        overlay.style.display = 'flex';
+        progressFill.style.width = '10%';
+        loadingStatus.textContent = 'Отправка файла...';
+        logMessages.innerHTML = '';
+        addLogMessage('Начало загрузки файла: ' + file.name, 'info');
+
+        const formData = new FormData();
+        formData.append('action', 'upload');
+        formData.append('dbName', dbName);
+        formData.append('sqlFile', file);
+        if (displayName) formData.append('displayName', displayName);
+        if (accessPassword) formData.append('accessPassword', accessPassword);
+        if (folderId) formData.append('folderId', folderId);
+        if (csrfToken) formData.append('csrf_token', csrfToken);
+
+        const eventSource = new EventSource('/api/logs');
+        eventSource.onmessage = function(event) {
             try {
-                const data = JSON.parse(xhr.responseText);
-                if (data.success) {
-                    progressFill.style.width = '100%';
-                    loadingStatus.textContent = 'База данных успешно создана';
-                    addLogMessage('✅ База данных успешно создана!', 'success');
-                    setTimeout(() => {
-                        overlay.style.display = 'none';
-
-                        document.getElementById('uploadForm').reset();
-                        document.getElementById('fileName').textContent = 'Выберите SQL файл';
-
-                        const fileUpload = document.querySelector('#uploadForm .file-upload');
-                        if (fileUpload) {
-                            fileUpload.style.borderColor = 'var(--border)';
-                            fileUpload.style.background = 'var(--light)';
-                        }
-
-                        document.getElementById('accessPassword').value = '';
-
-                        loadDatabasesList();
-                        loadFoldersList();
-                        loadFoldersForSelect();
-                        loadDatabasesForSchemaSelect();
-                        loadDatabasesForMoodleSelect();
-                    }, 2000);
-                } else {
-                    overlay.style.display = 'none';
+                const data = JSON.parse(event.data);
+                if (data.type === 'start') {
+                    addLogMessage('Начало выполнения скрипта. Всего запросов: ' + data.total, 'info');
+                } else if (data.type === 'progress') {
+                    const percent = Math.round((data.current / data.total) * 100);
+                    progressFill.style.width = percent + '%';
+                    loadingStatus.textContent = 'Выполнение: ' + percent + '% (' + data.current + '/' + data.total + ')';
+                    addLogMessage('▶ ' + (data.query || 'Выполнение запроса...'), 'info');
+                } else if (data.type === 'success') {
+                    addLogMessage('✅ ' + data.message, 'success');
+                } else if (data.type === 'error') {
                     addLogMessage('❌ Ошибка: ' + data.error, 'error');
-                    alert('Ошибка: ' + data.error);
+                } else if (data.type === 'complete') {
+                    addLogMessage('🎉 ' + data.message, 'success');
+                    setTimeout(() => eventSource.close(), 2000);
                 }
             } catch (e) {
-                overlay.style.display = 'none';
-                alert('Ошибка при обработке ответа сервера');
+                addLogMessage(event.data, 'info');
             }
-        } else {
+        };
+        eventSource.onerror = function() {
+            addLogMessage('⚠️ Соединение с сервером логов закрыто', 'warning');
+            eventSource.close();
+        };
+
+        const xhr = new XMLHttpRequest();
+        xhr.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable) {
+                const percent = (e.loaded / e.total) * 100;
+                progressFill.style.width = percent + '%';
+                loadingStatus.textContent = 'Загрузка файла: ' + Math.round(percent) + '%';
+            }
+        });
+        xhr.addEventListener('load', function() {
+            if (xhr.status === 200) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        progressFill.style.width = '100%';
+                        loadingStatus.textContent = 'База данных успешно создана';
+                        addLogMessage('✅ База данных успешно создана!', 'success');
+                        setTimeout(() => {
+                            overlay.style.display = 'none';
+
+                            uploadForm.reset();
+                            document.getElementById('fileName').textContent = 'Выберите SQL файл';
+
+                            const fileUpload = document.querySelector('#uploadForm .file-upload');
+                            if (fileUpload) {
+                                fileUpload.style.borderColor = 'var(--border)';
+                                fileUpload.style.background = 'var(--light)';
+                            }
+
+                            document.getElementById('accessPassword').value = '';
+
+                            loadDatabasesList();
+                            loadFoldersList();
+                            loadFoldersForSelect();
+                            loadDatabasesForSchemaSelect();
+                            loadDatabasesForMoodleSelect();
+                        }, 2000);
+                    } else {
+                        overlay.style.display = 'none';
+                        addLogMessage('❌ Ошибка: ' + data.error, 'error');
+                        alert('Ошибка: ' + data.error);
+                    }
+                } catch (e) {
+                    overlay.style.display = 'none';
+                    alert('Ошибка при обработке ответа сервера');
+                }
+            } else {
+                overlay.style.display = 'none';
+                alert('Ошибка соединения: ' + xhr.status);
+            }
+        });
+        xhr.addEventListener('error', function() {
             overlay.style.display = 'none';
-            alert('Ошибка соединения: ' + xhr.status);
-        }
+            alert('Ошибка соединения');
+        });
+        xhr.open('POST', '/api/teacher', true);
+        xhr.send(formData);
     });
-    xhr.addEventListener('error', function() {
-        overlay.style.display = 'none';
-        alert('Ошибка соединения');
-    });
-    xhr.open('POST', '/api/teacher', true);
-    xhr.send(formData);
-});
+}
 
 // Переключение вкладок
 document.querySelectorAll('.tab').forEach(tab => {
@@ -802,15 +884,24 @@ document.querySelectorAll('.tab').forEach(tab => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         tab.classList.add('active');
-        document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+        const tabId = document.getElementById(`tab-${tab.dataset.tab}`);
+        if (tabId) tabId.classList.add('active');
     });
 });
 
+// Функция для получения CSRF-токена извне (устанавливается из JSP)
+window.updateCsrfToken = function(token) {
+    csrfToken = token;
+};
+
 // Загрузка начальных данных
-loadFoldersForSelect();
-loadDatabasesList();
-loadFoldersList();
-loadSessions();
-loadDatabasesForSchemaSelect();
-loadDatabasesForMoodleSelect();
-setInterval(loadSessions, 5000);
+(async function init() {
+    await loadCsrfToken();
+    loadFoldersForSelect();
+    loadDatabasesList();
+    loadFoldersList();
+    loadSessions();
+    loadDatabasesForSchemaSelect();
+    loadDatabasesForMoodleSelect();
+    setInterval(loadSessions, 5000);
+})();

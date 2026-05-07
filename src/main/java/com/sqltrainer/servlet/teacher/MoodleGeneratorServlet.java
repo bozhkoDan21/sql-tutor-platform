@@ -39,7 +39,7 @@ public class MoodleGeneratorServlet extends HttpServlet {
 
             if (dbName == null || dbName.isEmpty()) {
                 response.put("success", false);
-                response.put("error", "Database name is required");
+                response.put("error", "Не указано имя базы данных");
                 resp.getWriter().write(gson.toJson(response));
                 return;
             }
@@ -50,7 +50,7 @@ public class MoodleGeneratorServlet extends HttpServlet {
 
             if (filePart == null || filePart.getSize() == 0) {
                 response.put("success", false);
-                response.put("error", "Questions file is required");
+                response.put("error", "Не указан файл с вопросами");
                 resp.getWriter().write(gson.toJson(response));
                 return;
             }
@@ -60,7 +60,7 @@ public class MoodleGeneratorServlet extends HttpServlet {
 
             if (questions.isEmpty()) {
                 response.put("success", false);
-                response.put("error", "No valid questions found in file");
+                response.put("error", "В файле не найдено корректных вопросов");
                 resp.getWriter().write(gson.toJson(response));
                 return;
             }

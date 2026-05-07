@@ -38,14 +38,14 @@ public class DbInfoServlet extends HttpServlet {
         String dbName = req.getParameter("db");
 
         if (dbName == null || dbName.isEmpty()) {
-            resp.getWriter().write("{\"error\":\"Database name is required\"}");
+            resp.getWriter().write("{\"error\":\"Не указано имя базы данных\"}");
             return;
         }
 
         // Валидация имени базы данных
         if (!isValidDatabaseName(dbName)) {
             log.warn("Invalid database name: {}", dbName);
-            resp.getWriter().write("{\"error\":\"Invalid database name\"}");
+            resp.getWriter().write("{\"error\":\"Недопустимое имя базы данных\"}");
             return;
         }
 

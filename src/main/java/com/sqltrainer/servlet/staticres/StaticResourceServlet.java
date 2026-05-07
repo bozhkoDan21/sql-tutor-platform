@@ -47,7 +47,7 @@ public class StaticResourceServlet extends HttpServlet {
         }
 
         if (is == null) {
-            resp.sendError(404, "File not found: " + path);
+            resp.sendError(404, "Файл не найден: " + path);
             return;
         }
 

@@ -82,7 +82,7 @@ public class DatabaseConfig {
      */
     public static Connection getConnection(Role role, String dbName) throws SQLException {
         if (role == Role.STUDENT && (dbName == null || dbName.isEmpty())) {
-            throw new SQLException("Database name is required for STUDENT connection");
+            throw new SQLException("Для подключения студента требуется указать имя базы данных");
         }
 
         switch (role) {

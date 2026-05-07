@@ -1,6 +1,7 @@
 package com.sqltrainer.servlet.auth;
 
 import com.google.gson.Gson;
+import com.sqltrainer.util.CsrfTokenManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +30,7 @@ public class LogoutServlet extends HttpServlet {
 
         HttpSession session = req.getSession(false);
         if (session != null) {
+            CsrfTokenManager.invalidateToken(session);
             session.invalidate();
             log.info("Teacher logged out");
         }
