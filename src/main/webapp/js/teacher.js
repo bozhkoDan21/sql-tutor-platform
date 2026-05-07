@@ -374,7 +374,7 @@ window.editDatabase = function(dbName, displayName, folderId, isVisible, accessS
     document.getElementById('editDbName').value = dbName;
     document.getElementById('editDisplayName').value = displayName || '';
     document.getElementById('editAccessPassword').value = '';
-    document.getElementById('editRemovePasswordCheckbox').checked = false;  // Добавить эту строку
+    document.getElementById('editRemovePasswordCheckbox').checked = false;
 
     const visibleValue = (isVisible !== undefined && isVisible !== null) ? isVisible : true;
     document.getElementById('editIsVisible').value = visibleValue ? 'true' : 'false';
@@ -431,7 +431,6 @@ async function saveDatabaseMetadata() {
     if (displayName) formData.append('displayName', displayName);
     if (folderId) formData.append('folderId', folderId);
 
-    // Если чекбокс отмечен - передаём специальный маркер для удаления пароля
     if (removePassword) {
         formData.append('removePassword', 'true');
     } else if (accessPassword) {
@@ -456,6 +455,7 @@ async function saveDatabaseMetadata() {
             loadFoldersList();
             loadFoldersForSelect();
             loadDatabasesForSchemaSelect();
+            loadDatabasesForMoodleSelect();
         } else {
             alert('Ошибка: ' + data.error);
         }
@@ -562,6 +562,109 @@ window.unblockSession = async function(sessionId) {
 };
 
 // ============================================
+// MOODLE ГЕНЕРАЦИЯ
+// ============================================
+
+// Обновление метки файла для Moodle
+function updateMoodleFileLabel(input) {
+    const fileNameSpan = document.getElementById('moodleFileName');
+    if (!fileNameSpan) return;
+
+    if (input.files && input.files.length > 0) {
+        const fileName = input.files[0].name;
+        fileNameSpan.textContent = '📄 ' + fileName;
+    } else {
+        fileNameSpan.textContent = 'Выберите файл (.txt)';
+    }
+}
+
+// Загрузка списка баз для Moodle селектора
+async function loadDatabasesForMoodleSelect() {
+    const select = document.getElementById('moodleDbSelect');
+    if (!select) return;
+
+    try {
+        const response = await fetch('/api/teacher?action=list');
+        const data = await response.json();
+        select.innerHTML = '<option value="">Выберите базу</option>';
+        if (data.databases) {
+            for (const db of data.databases) {
+                const option = document.createElement('option');
+                option.value = db.dbName;
+                option.textContent = db.displayName + ' (' + db.dbName + ')';
+                select.appendChild(option);
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load databases for moodle select:', e);
+    }
+}
+
+// Обработчик формы Moodle
+const moodleForm = document.getElementById('moodleForm');
+if (moodleForm) {
+    moodleForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const dbName = document.getElementById('moodleDbSelect').value;
+        const category = document.getElementById('moodleCategory').value;
+        const format = document.getElementById('moodleFormat') ? document.getElementById('moodleFormat').value : 'gift';
+        const fileInput = document.getElementById('questionsFile');
+        const file = fileInput.files[0];
+
+        if (!dbName) {
+            alert('Выберите базу данных');
+            return;
+        }
+        if (!file) {
+            alert('Выберите файл с вопросами');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('database', dbName);
+        formData.append('category', category);
+        formData.append('format', format);
+        formData.append('questionsFile', file);
+
+        const resultDiv = document.getElementById('moodleResult');
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<div class="empty-state">⏳ Генерация...</div>';
+
+        try {
+            const response = await fetch('/api/teacher/moodle', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                let extension = '';
+                if (format === 'gift') extension = '.gift';
+                else if (format === 'xml') extension = '.xml';
+                else extension = '.txt';
+                a.download = `moodle_questions_${Date.now()}${extension}`;
+                a.href = url;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                resultDiv.innerHTML = '<div class="empty-state" style="color: green;">✅ Файл сгенерирован и скачан</div>';
+                setTimeout(() => resultDiv.style.display = 'none', 3000);
+            } else {
+                const error = await response.json();
+                resultDiv.innerHTML = `<div class="empty-state" style="color: red;">❌ Ошибка: ${error.error || 'Неизвестная ошибка'}</div>`;
+            }
+        } catch (err) {
+            resultDiv.innerHTML = `<div class="empty-state" style="color: red;">❌ Ошибка: ${err.message}</div>`;
+        }
+    });
+}
+
+// ============================================
 // ЗАГРУЗКА SQL-СКРИПТА
 // ============================================
 
@@ -654,27 +757,22 @@ document.getElementById('uploadForm').addEventListener('submit', function(e) {
                     setTimeout(() => {
                         overlay.style.display = 'none';
 
-                        // Полный сброс формы
                         document.getElementById('uploadForm').reset();
-
-                        // Ручной сброс текста файла
                         document.getElementById('fileName').textContent = 'Выберите SQL файл';
 
-                        // Сброс стилей file-upload
                         const fileUpload = document.querySelector('#uploadForm .file-upload');
                         if (fileUpload) {
                             fileUpload.style.borderColor = 'var(--border)';
                             fileUpload.style.background = 'var(--light)';
                         }
 
-                        // Сброс значения поля пароля (на всякий случай)
                         document.getElementById('accessPassword').value = '';
 
-                        // Перезагрузка списков
                         loadDatabasesList();
                         loadFoldersList();
                         loadFoldersForSelect();
                         loadDatabasesForSchemaSelect();
+                        loadDatabasesForMoodleSelect();
                     }, 2000);
                 } else {
                     overlay.style.display = 'none';
@@ -714,4 +812,5 @@ loadDatabasesList();
 loadFoldersList();
 loadSessions();
 loadDatabasesForSchemaSelect();
+loadDatabasesForMoodleSelect();
 setInterval(loadSessions, 5000);

@@ -531,6 +531,48 @@
                 </div>
             </div>
 
+            <!-- Карточка генерации вопросов для Moodle -->
+            <div class="card">
+                <h3 class="card-title">📚 Генерация вопросов для Moodle</h3>
+                <form id="moodleForm" class="upload-form" autocomplete="off">
+                    <div class="form-group">
+                        <label class="form-label">Выберите базу данных</label>
+                        <select id="moodleDbSelect" class="form-input" required>
+                            <option value="">Выберите базу</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Название категории (опционально)</label>
+                        <input type="text" id="moodleCategory" class="form-input" placeholder="SQL Questions from ...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Формат вывода</label>
+                        <select id="moodleFormat" class="form-input">
+                            <option value="gift">GIFT (рекомендуется, работает в любом Moodle)</option>
+                            <option value="xml">Moodle XML (требуется плагин CodeRunner)</option>
+                            <option value="text">Текстовый просмотр (для проверки)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Файл с вопросами</label>
+                        <div class="file-upload">
+                            <input type="file" id="questionsFile" accept=".txt" class="file-input" onchange="updateMoodleFileLabel(this)" required>
+                            <label for="questionsFile" class="file-label">
+                                <span class="file-icon">📄</span>
+                                <span id="moodleFileName">Выберите файл (.txt)</span>
+                            </label>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 0.25rem;">
+                            Формат: каждая пара строк - вопрос, затем SQL запрос
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Генерировать</button>
+                    </div>
+                </form>
+                <div id="moodleResult" style="margin-top: 1rem; display: none;"></div>
+            </div>
+
             <!-- Карточка списка существующих баз данных -->
             <div class="card">
                 <h3 class="card-title">🗄️ Существующие базы данных</h3>
