@@ -2,7 +2,6 @@ package com.sqltrainer.servlet.teacher;
 
 import com.sqltrainer.config.DatabaseConfig;
 import com.sqltrainer.servlet.log.LogStreamServlet;
-import com.sqltrainer.servlet.student.StudentServlet;
 import com.sqltrainer.util.Constants;
 import com.sqltrainer.util.QueryExecutor;
 import com.google.gson.Gson;
@@ -26,8 +25,16 @@ import java.util.regex.Pattern;
 
 /**
  * Сервлет для управления учебными базами данных преподавателем.
- * Позволяет создавать новые БД из SQL-скриптов, удалять существующие,
- * просматривать активные сессии студентов и завершать их.
+ *
+ * Функциональность:
+ * - Создание новых БД из SQL-скриптов
+ * - Загрузка схемы БД (изображение)
+ * - Удаление существующих БД
+ * - Управление папками (категориями)
+ * - Управление метаданными БД (видимость, пароль, период доступа)
+ * - Генерация вопросов для Moodle
+ *
+ * Мониторинг сессий студентов УДАЛЁН по требованию.
  */
 @WebServlet("/api/teacher")
 @MultipartConfig(
@@ -39,10 +46,13 @@ public class TeacherServlet extends HttpServlet {
     private static final Logger log = LoggerFactory.getLogger(TeacherServlet.class);
     private final Gson gson = new Gson();
 
+    // Разрешённые расширения файлов для загрузки SQL
     private static final Set<String> ALLOWED_EXTENSIONS = new HashSet<>(Arrays.asList(Constants.ALLOWED_SQL_EXTENSIONS));
+
+    // Паттерн для валидации имени базы данных (только латиница, цифры, подчёркивание)
     private static final Pattern DB_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
-    // Защищенные базы данных (только системные PostgreSQL)
+    // Защищённые базы данных (системные PostgreSQL) — нельзя удалить
     private static final Set<String> PROTECTED_DATABASES = new HashSet<>(Arrays.asList(
             Constants.PROTECTED_DATABASES
     ));
@@ -58,7 +68,10 @@ public class TeacherServlet extends HttpServlet {
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, "postgres")) {
 
             switch (action) {
+                // ========== УПРАВЛЕНИЕ БАЗАМИ ДАННЫХ ==========
+
                 case "upload":
+                    // Загрузка SQL-скрипта и создание новой БД
                     String dbName = req.getParameter("dbName");
                     String folderId = req.getParameter("folderId");
                     String displayName = req.getParameter("displayName");
@@ -68,49 +81,24 @@ public class TeacherServlet extends HttpServlet {
                     break;
 
                 case "uploadSchema":
+                    // Загрузка схемы БД (изображение со связями таблиц)
                     String schemaDbName = req.getParameter("dbName");
                     Part imagePart = req.getPart("schemaImage");
                     handleUploadSchemaImage(conn, schemaDbName, imagePart, response);
                     break;
 
                 case "list":
+                    // Получение списка всех БД для преподавателя
                     response.put("databases", getDatabaseList(conn));
                     break;
 
                 case "delete":
+                    // Удаление БД (с проверкой защиты системных БД)
                     String deleteDbName = req.getParameter("dbName");
                     handleDelete(conn, deleteDbName, response);
                     break;
 
-                case "sessions":
-                    Map<String, StudentServlet.SessionInfo> sessions = StudentServlet.getActiveSessions();
-                    List<Map<String, Object>> sessionList = new ArrayList<>();
-                    for (StudentServlet.SessionInfo info : sessions.values()) {
-                        if (info.isTeacher()) {
-                            continue;
-                        }
-                        Map<String, Object> sessionMap = new HashMap<>();
-                        sessionMap.put("sessionId", info.getSessionId());
-                        sessionMap.put("ipAddress", info.getIpAddress());
-                        sessionMap.put("dbName", info.getDbName());
-                        sessionMap.put("lastQuery", info.getLastQuery());
-                        sessionMap.put("lastQueryTimeMs", info.getLastQueryTimeMs());
-                        sessionMap.put("lastAccess", info.getLastAccess());
-                        sessionMap.put("blocked", info.isBlocked());
-                        sessionList.add(sessionMap);
-                    }
-                    response.put("sessions", sessionList);
-                    break;
-
-                case "terminateSession":
-                    String terminateSessionId = req.getParameter("sessionId");
-                    handleTerminateSession(terminateSessionId, response);
-                    break;
-
-                case "unblockSession":
-                    String unblockSessionId = req.getParameter("sessionId");
-                    handleUnblockSession(unblockSessionId, response);
-                    break;
+                // ========== УПРАВЛЕНИЕ ПАПКАМИ ==========
 
                 case "createFolder":
                     String folderName = req.getParameter("folderName");
@@ -120,6 +108,8 @@ public class TeacherServlet extends HttpServlet {
                 case "listFolders":
                     response.put("folders", getFoldersList(conn));
                     break;
+
+                // ========== РЕДАКТИРОВАНИЕ МЕТАДАННЫХ ==========
 
                 case "updateDatabaseMetadata":
                     String updateDbName = req.getParameter("dbName");
@@ -133,6 +123,8 @@ public class TeacherServlet extends HttpServlet {
                     handleUpdateDatabaseMetadata(conn, updateDbName, updateDisplayName, updateFolderId,
                             updateAccessPassword, isVisible, accessStart, accessEnd, removePassword, response);
                     break;
+
+                // ========== НЕИЗВЕСТНОЕ ДЕЙСТВИЕ ==========
 
                 default:
                     response.put("error", "Неизвестное действие: " + action);
@@ -150,8 +142,13 @@ public class TeacherServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        // GET-запросы обрабатываются так же, как POST
         doPost(req, resp);
     }
+
+    // ============================================
+    // УПРАВЛЕНИЕ ПАПКАМИ
+    // ============================================
 
     /**
      * Создаёт новую папку для группировки баз данных.
@@ -173,6 +170,7 @@ public class TeacherServlet extends HttpServlet {
             stmt.executeUpdate();
             response.put("success", true);
             response.put("message", "Папка '" + folderName + "' создана");
+            log.info("Folder created: {}", folderName);
         } catch (SQLException e) {
             log.error("Failed to create folder: {}", e.getMessage());
             response.put("error", "Ошибка создания папки: " + e.getMessage());
@@ -203,43 +201,16 @@ public class TeacherServlet extends HttpServlet {
         return folders;
     }
 
-    /**
-     * Завершает (блокирует) сессию студента.
-     *
-     * @param sessionId идентификатор сессии
-     * @param response  объект для формирования ответа
-     */
-    private void handleTerminateSession(String sessionId, Map<String, Object> response) {
-        if (sessionId == null || sessionId.isEmpty()) {
-            response.put("error", "Не указан идентификатор сессии");
-            return;
-        }
-
-        Map<String, StudentServlet.SessionInfo> sessions = StudentServlet.getActiveSessions();
-        StudentServlet.SessionInfo info = sessions.get(sessionId);
-
-        if (info != null) {
-            if (info.isTeacher()) {
-                response.put("error", "Нельзя завершить сессию преподавателя");
-                log.warn("Attempt to terminate teacher session: {}", sessionId);
-                return;
-            }
-            info.setBlocked(true);
-            response.put("success", true);
-            response.put("message", "Сессия завершена: " + sessionId.substring(0, 8) + "...");
-            log.info("Teacher terminated session: {} from IP {}", sessionId.substring(0, 8), info.getIpAddress());
-        } else {
-            response.put("error", "Сессия не найдена или уже завершена");
-            log.warn("Session not found: {}", sessionId);
-        }
-    }
+    // ============================================
+    // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ (экранирование, валидация)
+    // ============================================
 
     /**
      * Экранирует идентификатор для безопасного использования в SQL.
-     * Использует встроенную функцию PostgreSQL quote_ident.
+     * Использует встроенную функцию PostgreSQL quote_ident для защиты от SQL-инъекций.
      *
      * @param conn       соединение с БД
-     * @param identifier идентификатор для экранирования
+     * @param identifier идентификатор для экранирования (имя БД, таблицы, колонки)
      * @return экранированный идентификатор
      * @throws SQLException при ошибке выполнения запроса
      */
@@ -255,18 +226,29 @@ public class TeacherServlet extends HttpServlet {
         return identifier;
     }
 
+    // ============================================
+    // РЕДАКТИРОВАНИЕ МЕТАДАННЫХ БАЗЫ ДАННЫХ
+    // ============================================
+
     /**
-     * Обновляет метаданные базы данных (отображаемое имя, папку, пароль, видимость, период доступа).
+     * Обновляет метаданные базы данных.
+     *
+     * Поля для обновления:
+     * - Отображаемое имя (display_name)
+     * - Папка (folder_id)
+     * - Пароль доступа (access_password_hash)
+     * - Видимость для студентов (is_visible)
+     * - Период доступа (access_start, access_end)
      *
      * @param conn               соединение с БД
-     * @param dbName             имя базы данных
+     * @param dbName             имя базы данных (идентификатор)
      * @param displayName        отображаемое имя
      * @param folderId           идентификатор папки
-     * @param accessPassword     пароль доступа
-     * @param isVisible          видимость для студентов
-     * @param accessStartStr     дата начала доступа
-     * @param accessEndStr       дата окончания доступа
-     * @param removePasswordParam флаг удаления пароля
+     * @param accessPassword     новый пароль доступа (если не пуст)
+     * @param isVisible          видимость для студентов ("true"/"false")
+     * @param accessStartStr     дата начала доступа (yyyy-MM-dd)
+     * @param accessEndStr       дата окончания доступа (yyyy-MM-dd)
+     * @param removePasswordParam флаг удаления пароля ("true"/null)
      * @param response           объект для формирования ответа
      */
     private void handleUpdateDatabaseMetadata(Connection conn, String dbName, String displayName,
@@ -283,15 +265,19 @@ public class TeacherServlet extends HttpServlet {
             StringBuilder sql = new StringBuilder("UPDATE databases_metadata SET ");
             List<Object> params = new ArrayList<>();
 
+            // Обновление отображаемого имени
             if (displayName != null && !displayName.isEmpty()) {
                 sql.append("display_name = ?, ");
                 params.add(displayName);
             }
+
+            // Обновление папки
             if (folderId != null && !folderId.isEmpty()) {
                 sql.append("folder_id = ?, ");
                 params.add(Long.parseLong(folderId));
             }
 
+            // Обновление пароля: удаление существующего или установка нового
             if ("true".equals(removePasswordParam)) {
                 sql.append("access_password_hash = NULL, ");
             } else if (accessPassword != null && !accessPassword.isEmpty()) {
@@ -299,14 +285,19 @@ public class TeacherServlet extends HttpServlet {
                 params.add(BCrypt.hashpw(accessPassword, BCrypt.gensalt()));
             }
 
+            // Обновление видимости
             if (isVisible != null) {
                 sql.append("is_visible = ?, ");
                 params.add(Boolean.parseBoolean(isVisible));
             }
+
+            // Обновление даты начала доступа
             if (accessStartStr != null && !accessStartStr.isEmpty()) {
                 sql.append("access_start = ?::date, ");
                 params.add(accessStartStr);
             }
+
+            // Обновление даты окончания доступа
             if (accessEndStr != null && !accessEndStr.isEmpty()) {
                 sql.append("access_end = ?::date, ");
                 params.add(accessEndStr);
@@ -317,6 +308,7 @@ public class TeacherServlet extends HttpServlet {
                 return;
             }
 
+            // Удаляем последнюю запятую и пробел, добавляем WHERE условие
             sql.setLength(sql.length() - 2);
             sql.append(" WHERE db_name = ?");
             params.add(dbName);
@@ -329,7 +321,8 @@ public class TeacherServlet extends HttpServlet {
                 if (updated > 0) {
                     response.put("success", true);
                     response.put("message", "Метаданные базы данных обновлены");
-                    QueryExecutor.clearCache();
+                    QueryExecutor.clearCache(); // Очищаем кэш запросов
+                    log.info("Database metadata updated for: {}", dbName);
                 } else {
                     response.put("error", "База данных не найдена");
                 }
@@ -340,37 +333,49 @@ public class TeacherServlet extends HttpServlet {
         }
     }
 
+    // ============================================
+    // ЗАГРУЗКА СХЕМЫ БАЗЫ ДАННЫХ
+    // ============================================
+
     /**
      * Загружает схему базы данных (изображение со связями таблиц).
      *
+     * Изображение сохраняется в папку /uploads/schemas/ внутри контейнера Tomcat.
+     * Старое изображение удаляется при замене.
+     *
      * @param conn       соединение с БД
      * @param dbName     имя базы данных
-     * @param imagePart  файл изображения
+     * @param imagePart  файл изображения (JPEG, PNG, GIF)
      * @param response   объект для формирования ответа
      * @throws SQLException при ошибке выполнения запроса
      */
     private void handleUploadSchemaImage(Connection conn, String dbName, Part imagePart, Map<String, Object> response) throws SQLException {
+        // Валидация имени БД
         if (dbName == null || dbName.isEmpty()) {
             response.put("error", "Не указано имя базы данных");
             return;
         }
 
+        // Валидация файла
         if (imagePart == null || imagePart.getSize() == 0) {
             response.put("error", "Не указан файл изображения");
             return;
         }
 
+        // Проверка MIME-типа (только изображения)
         String contentType = imagePart.getContentType();
         if (contentType == null || !contentType.startsWith("image/")) {
             response.put("error", "Разрешены только файлы изображений (JPEG, PNG, GIF)");
             return;
         }
 
+        // Ограничение размера (5 МБ)
         if (imagePart.getSize() > 5 * 1024 * 1024) {
             response.put("error", "Файл изображения слишком большой (максимум 5 МБ)");
             return;
         }
 
+        // Определение расширения файла по MIME-типу
         String extension = "png";
         if (contentType.contains("jpeg") || contentType.contains("jpg")) {
             extension = "jpg";
@@ -378,6 +383,7 @@ public class TeacherServlet extends HttpServlet {
             extension = "gif";
         }
 
+        // Генерация уникального имени файла
         String fileName = System.currentTimeMillis() + "_" + dbName + "." + extension;
         String uploadPath = "/usr/local/tomcat/uploads/schemas/";
         java.io.File uploadDir = new java.io.File(uploadPath);
@@ -392,6 +398,7 @@ public class TeacherServlet extends HttpServlet {
 
             String imageUrl = "/uploads/schemas/" + fileName;
 
+            // Удаляем старое изображение, если существует
             String checkSql = "SELECT schema_image_url FROM databases_metadata WHERE db_name = ?";
             try (PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
                 checkStmt.setString(1, dbName);
@@ -409,6 +416,7 @@ public class TeacherServlet extends HttpServlet {
                 }
             }
 
+            // Обновляем URL схемы в метаданных
             String sql = "UPDATE databases_metadata SET schema_image_url = ? WHERE db_name = ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, imageUrl);
@@ -429,8 +437,19 @@ public class TeacherServlet extends HttpServlet {
         }
     }
 
+    // ============================================
+    // ЗАГРУЗКА SQL-СКРИПТА И СОЗДАНИЕ БД
+    // ============================================
+
     /**
      * Обрабатывает загрузку SQL-скрипта и создание новой базы данных.
+     *
+     * Процесс:
+     * 1. Валидация имени БД, файла и содержимого
+     * 2. Создание физической БД в PostgreSQL
+     * 3. Выполнение SQL-скрипта с логированием прогресса через SSE
+     * 4. Настройка прав доступа для ролей students и teacher_role
+     * 5. Сохранение метаданных в таблицу databases_metadata
      *
      * @param conn           соединение с БД
      * @param dbName         имя новой базы данных
@@ -445,36 +464,45 @@ public class TeacherServlet extends HttpServlet {
     private void handleUpload(Connection conn, String dbName, String folderId, String displayName, String accessPassword,
                               Part filePart, Map<String, Object> response) throws IOException, SQLException {
 
+        // ===== ВАЛИДАЦИЯ =====
+
         if (dbName == null || dbName.isEmpty()) {
             response.put("error", "Не указано имя базы данных");
             return;
         }
 
+        // Запрещаем создание БД с системными именами PostgreSQL
         if (PROTECTED_DATABASES.contains(dbName.toLowerCase())) {
             response.put("error", "Нельзя создать базу с системным именем: " + dbName);
             return;
         }
 
+        // Проверка имени БД (только латиница, цифры, подчёркивание)
         if (!DB_NAME_PATTERN.matcher(dbName).matches()) {
             response.put("error", "Имя базы данных может содержать только буквы, цифры и подчёркивания");
             return;
         }
+
+        // Максимальная длина имени БД в PostgreSQL — 63 символа
         if (dbName.length() > Constants.MAX_DB_NAME_LENGTH) {
             response.put("error", "Имя базы данных слишком длинное (максимум 63 символа)");
             return;
         }
 
+        // Проверка наличия файла
         if (filePart == null || filePart.getSize() == 0) {
             response.put("error", "Не указан SQL файл");
             return;
         }
 
+        // Проверка расширения файла (.sql)
         String fileName = getFileName(filePart);
         if (!isValidFileExtension(fileName)) {
             response.put("error", "Разрешены только .sql файлы");
             return;
         }
 
+        // Чтение и проверка содержимого SQL-скрипта
         String script = readSqlScript(filePart);
         if (script.length() > Constants.MAX_SCRIPT_SIZE_BYTES) {
             response.put("error", "SQL скрипт слишком большой (максимум 2 МБ)");
@@ -485,11 +513,13 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
+        // Проверка существования БД с таким именем
         if (databaseExists(conn, dbName)) {
             response.put("error", "База данных с именем '" + dbName + "' уже существует");
             return;
         }
 
+        // Проверка существования выбранной папки
         if (folderId != null && !folderId.isEmpty()) {
             try {
                 long folderIdLong = Long.parseLong(folderId);
@@ -506,11 +536,14 @@ public class TeacherServlet extends HttpServlet {
             }
         }
 
+        // ===== СОЗДАНИЕ БАЗЫ ДАННЫХ =====
+
         QueryExecutor.clearCache();
         log.info("Cache cleared before creating database: {}", dbName);
 
         String quotedDbName = quoteIdent(conn, dbName);
 
+        // Создаём физическую БД с владельцем teacher_role
         try (Statement stmt = conn.createStatement()) {
             String createSql = "CREATE DATABASE " + quotedDbName + " OWNER teacher_role";
             log.debug("Executing: {}", createSql);
@@ -520,6 +553,8 @@ public class TeacherServlet extends HttpServlet {
             response.put("error", "Ошибка создания базы данных: " + e.getMessage());
             return;
         }
+
+        // ===== ВЫПОЛНЕНИЕ SQL-СКРИПТА =====
 
         try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, dbName);
              Statement stmt = dbConn.createStatement()) {
@@ -537,11 +572,15 @@ public class TeacherServlet extends HttpServlet {
             }
         }
 
+        // ===== НАСТРОЙКА ПРАВ ДОСТУПА =====
+
         try {
             grantAccessForNewDatabase(conn, quotedDbName, dbName);
         } catch (SQLException e) {
             log.warn("Could not grant access to {}: {}", dbName, e.getMessage());
         }
+
+        // ===== СОХРАНЕНИЕ МЕТАДАННЫХ =====
 
         if (folderId != null && !folderId.isEmpty()) {
             String passwordHash = null;
@@ -567,31 +606,40 @@ public class TeacherServlet extends HttpServlet {
 
         response.put("success", true);
         response.put("message", "База данных '" + dbName + "' успешно создана");
+        log.info("Database created successfully: {}", dbName);
     }
 
     /**
      * Предоставляет доступ для студентов и преподавателя к созданной базе данных.
      *
-     * @param conn          соединение с БД
+     * Права доступа:
+     * - students: только SELECT на все таблицы
+     * - teacher_role: полные права (ALL PRIVILEGES)
+     *
+     * @param conn          соединение с БД (системная БД postgres)
      * @param quotedDbName  экранированное имя базы данных
      * @param dbName        имя базы данных
      * @throws SQLException при ошибке выполнения запроса
      */
     private void grantAccessForNewDatabase(Connection conn, String quotedDbName, String dbName) throws SQLException {
+        // Даём право подключения к БД для роли students
         try (Statement stmt = conn.createStatement()) {
             String grantConnectSql = "GRANT CONNECT ON DATABASE " + quotedDbName + " TO students";
             log.debug("Executing: {}", grantConnectSql);
             stmt.executeUpdate(grantConnectSql);
         }
 
+        // Настраиваем права внутри новой БД
         try (Connection dbConn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, dbName);
              Statement stmt = dbConn.createStatement()) {
 
+            // Для студентов: только SELECT
             stmt.executeUpdate("GRANT SELECT ON ALL TABLES IN SCHEMA public TO students");
             stmt.executeUpdate("GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO students");
             stmt.executeUpdate("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO students");
             stmt.executeUpdate("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO students");
 
+            // Для преподавателя: полные права
             stmt.executeUpdate("GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO teacher_role");
             stmt.executeUpdate("GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO teacher_role");
             stmt.executeUpdate("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO teacher_role");
@@ -601,11 +649,15 @@ public class TeacherServlet extends HttpServlet {
         }
     }
 
+    // ============================================
+    // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ ЗАГРУЗКИ SQL
+    // ============================================
+
     /**
      * Проверяет, является ли расширение файла допустимым (.sql).
      *
      * @param fileName имя файла
-     * @return true, если расширение допустимо
+     * @return true если расширение допустимо
      */
     private boolean isValidFileExtension(String fileName) {
         if (fileName == null || fileName.isEmpty()) return false;
@@ -619,16 +671,18 @@ public class TeacherServlet extends HttpServlet {
      * Проверяет содержимое SQL-скрипта на наличие опасных команд.
      *
      * @param content содержимое скрипта
-     * @return true, если скрипт безопасен и содержит CREATE TABLE или INSERT
+     * @return true если скрипт безопасен и содержит CREATE TABLE или INSERT
      */
     private boolean isValidSqlContent(String content) {
         if (content == null || content.trim().isEmpty()) return false;
         String lower = content.toLowerCase();
 
+        // Запрещаем опасные команды
         for (String cmd : Constants.DANGEROUS_SCRIPT_PATTERNS) {
             if (lower.contains(cmd)) return false;
         }
 
+        // Должен содержать CREATE TABLE или INSERT
         return lower.contains("create table") ||
                 lower.contains("insert into") ||
                 lower.contains("create database");
@@ -639,7 +693,7 @@ public class TeacherServlet extends HttpServlet {
      *
      * @param conn   соединение с БД
      * @param dbName имя базы данных
-     * @return true, если база существует
+     * @return true если база существует
      * @throws SQLException при ошибке выполнения запроса
      */
     private boolean databaseExists(Connection conn, String dbName) throws SQLException {
@@ -653,7 +707,7 @@ public class TeacherServlet extends HttpServlet {
     }
 
     /**
-     * Удаляет базу данных.
+     * Удаляет базу данных (используется при откате в случае ошибки).
      *
      * @param conn           соединение с БД
      * @param quotedDbName   экранированное имя базы данных
@@ -691,7 +745,10 @@ public class TeacherServlet extends HttpServlet {
     }
 
     /**
-     * Выполняет SQL-скрипт и отправляет прогресс через SSE логи.
+     * Выполняет SQL-скрипт и отправляет прогресс через SSE (Server-Sent Events).
+     *
+     * Логирование в реальном времени:
+     * - type: "start", "progress", "success", "error", "complete"
      *
      * @param stmt   SQL statement
      * @param script содержимое скрипта
@@ -704,6 +761,7 @@ public class TeacherServlet extends HttpServlet {
         int queryCount = 0;
         int totalQueries = 0;
 
+        // Подсчитываем общее количество запросов
         for (String line : lines) {
             String trimmed = line.trim();
             if (!trimmed.isEmpty() && !trimmed.startsWith("--") &&
@@ -712,7 +770,7 @@ public class TeacherServlet extends HttpServlet {
             }
         }
 
-        if (totalQueries == 0) totalQueries = 100;
+        if (totalQueries == 0) totalQueries = 100; // fallback
 
         log.info("Starting SQL script execution. Total queries: {}", totalQueries);
         LogStreamServlet.addLog("{\"type\":\"start\",\"total\":" + totalQueries + "}");
@@ -721,14 +779,18 @@ public class TeacherServlet extends HttpServlet {
             String trimmed = line.trim();
             if (trimmed.isEmpty()) continue;
 
+            // Обработка многострочных комментариев /* ... */
             if (trimmed.startsWith("/*")) inBlockComment = true;
             if (inBlockComment) {
                 if (trimmed.contains("*/")) inBlockComment = false;
                 continue;
             }
+            // Пропускаем однострочные комментарии --
             if (trimmed.startsWith("--")) continue;
 
             currentQuery.append(line).append(" ");
+
+            // Если строка заканчивается на ';' — выполняем запрос
             if (trimmed.endsWith(";")) {
                 String query = currentQuery.toString().trim();
                 if (!query.isEmpty() && !";".equals(query)) {
@@ -766,8 +828,7 @@ public class TeacherServlet extends HttpServlet {
     }
 
     /**
-     * Возвращает список баз данных для отображения студенту.
-     * Берёт данные из таблицы databases_metadata, учитывая видимость и период доступа.
+     * Возвращает список баз данных для отображения преподавателю.
      *
      * @param conn соединение с БД
      * @return список баз данных
@@ -823,45 +884,21 @@ public class TeacherServlet extends HttpServlet {
     }
 
     /**
-     * Разблокирует сессию студента.
-     *
-     * @param sessionId идентификатор сессии
-     * @param response  объект для формирования ответа
-     */
-    private void handleUnblockSession(String sessionId, Map<String, Object> response) {
-        if (sessionId == null || sessionId.isEmpty()) {
-            response.put("error", "Не указан идентификатор сессии");
-            return;
-        }
-
-        Map<String, StudentServlet.SessionInfo> sessions = StudentServlet.getActiveSessions();
-        StudentServlet.SessionInfo info = sessions.get(sessionId);
-
-        if (info != null) {
-            if (info.isTeacher()) {
-                response.put("error", "Нельзя разблокировать сессию преподавателя");
-                log.warn("Attempt to unblock teacher session: {}", sessionId);
-                return;
-            }
-            info.setBlocked(false);
-            response.put("success", true);
-            response.put("message", "Сессия разблокирована: " + sessionId.substring(0, 8) + "...");
-            log.info("Teacher unblocked session: {} from IP {}", sessionId.substring(0, 8), info.getIpAddress());
-        } else {
-            response.put("error", "Сессия не найдена");
-            log.warn("Session not found for unblock: {}", sessionId);
-        }
-    }
-
-    /**
      * Удаляет базу данных.
-     * Преподаватель может удалить ЛЮБУЮ базу, кроме системных PostgreSQL.
+     * Преподаватель может удалить любую базу, кроме системных PostgreSQL.
+     *
+     * Процесс удаления:
+     * 1. Закрываем пулы соединений HikariCP
+     * 2. Принудительно завершаем все активные подключения к БД
+     * 3. Выполняем DROP DATABASE
+     * 4. Удаляем запись из databases_metadata
      *
      * @param conn     соединение с БД
      * @param dbName   имя базы данных
      * @param response объект для формирования ответа
      */
     private void handleDelete(Connection conn, String dbName, Map<String, Object> response) {
+        // Валидация
         if (dbName == null || dbName.isEmpty()) {
             response.put("error", "Не указано имя базы данных");
             return;
@@ -873,12 +910,14 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
+        // Проверка имени БД
         if (!DB_NAME_PATTERN.matcher(dbName).matches()) {
             response.put("error", "Недопустимое имя базы данных");
             return;
         }
 
         try {
+            // Очищаем кэш запросов
             QueryExecutor.clearCache();
             log.info("Cache cleared before deleting database: {}", dbName);
 
@@ -888,7 +927,7 @@ public class TeacherServlet extends HttpServlet {
             log.info("Closed connection pools for database: {}", dbName);
 
             try (Statement stmt = conn.createStatement()) {
-                // 2. Принудительно завершаем ВСЕ подключения к базе
+                // 2. Принудительно завершаем все подключения к базе
                 String terminateSql = String.format(
                         "SELECT pg_terminate_backend(pid) " +
                                 "FROM pg_stat_activity " +

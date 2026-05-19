@@ -226,6 +226,22 @@
             border-color: var(--primary);
             color: white;
         }
+        .btn-delete {
+            background: none;
+            border: 2px solid var(--danger-light);
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        .btn-delete:hover {
+            background: var(--danger);
+            border-color: var(--danger);
+            color: white;
+        }
 
         /* Список баз для управления */
         .db-manager-list {
@@ -269,60 +285,6 @@
         .db-actions {
             display: flex;
             gap: 0.5rem;
-        }
-
-        /* Сессии */
-        .sessions-list {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-        .sessions-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.8rem;
-        }
-        .sessions-table th {
-            background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%);
-            color: white;
-            padding: 0.75rem;
-            text-align: left;
-            position: sticky;
-            top: 0;
-        }
-        .sessions-table td {
-            padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid var(--border);
-        }
-        .sessions-table tr:hover td {
-            background: var(--primary-light);
-        }
-        .status-badge {
-            padding: 0.2rem 0.5rem;
-            border-radius: 1rem;
-            font-size: 0.7rem;
-            font-weight: 500;
-        }
-        .status-active {
-            background: #d1fae5;
-            color: #065f46;
-        }
-        .status-blocked {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-        .btn-terminate {
-            background: none;
-            border: 1px solid var(--danger);
-            color: var(--danger);
-            cursor: pointer;
-            padding: 0.25rem 0.75rem;
-            border-radius: 1rem;
-            font-size: 0.7rem;
-            transition: all 0.2s;
-        }
-        .btn-terminate:hover {
-            background: var(--danger);
-            color: white;
         }
 
         /* Модальное окно редактирования */
@@ -370,6 +332,185 @@
             max-width: 100%;
             border-radius: var(--radius);
             margin-top: 0.5rem;
+        }
+
+        /* Общие стили форм */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--dark);
+        }
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        .file-upload {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.2s;
+            background: var(--light);
+            cursor: pointer;
+        }
+        .file-upload:hover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+        .file-input {
+            display: none;
+        }
+        .file-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            color: var(--text-light);
+            cursor: pointer;
+        }
+        .file-icon {
+            font-size: 2rem;
+        }
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 1rem;
+        }
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border: none;
+            border-radius: 2rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%);
+            color: var(--white);
+            box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary-hover) 0%, #4f46e5 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(79, 70, 229, 0.4);
+        }
+        .btn-secondary {
+            background: var(--white);
+            color: var(--text);
+            border: 2px solid var(--border);
+        }
+        .btn-secondary:hover {
+            background: var(--light);
+            border-color: var(--text-light);
+            transform: translateY(-2px);
+        }
+        .empty-state {
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-light);
+            font-style: italic;
+        }
+        .card {
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--dark);
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--primary-light);
+        }
+        .page-title {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--dark);
+            margin-bottom: 1.5rem;
+        }
+        .navbar {
+            background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%);
+            color: var(--white);
+            box-shadow: var(--shadow-lg);
+        }
+        .nav-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+            height: 4rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .badge {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .nav-right {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+        .nav-link.active {
+            background: white;
+            color: var(--primary);
+        }
+        .container {
+            max-width: 1280px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
         }
     </style>
 </head>
@@ -455,14 +596,10 @@
     <!-- Основной контент -->
     <main class="container">
         <h2 class="page-title">Панель управления</h2>
-
-        <!-- Вкладки -->
         <div class="tabs">
             <button class="tab active" data-tab="databases">🗄️ Базы данных</button>
             <button class="tab" data-tab="folders">📁 Папки</button>
-            <button class="tab" data-tab="sessions">👀 Активные сессии</button>
         </div>
-
         <!-- Вкладка: Базы данных -->
         <div id="tab-databases" class="tab-content active">
             <!-- Карточка загрузки новой базы данных -->
@@ -594,14 +731,6 @@
                     <button id="createFolderBtn" class="btn btn-primary">Создать папку</button>
                 </div>
                 <div class="folders-list" id="foldersList"><div class="empty-state">Загрузка...</div></div>
-            </div>
-        </div>
-
-        <!-- Вкладка: Активные сессии -->
-        <div id="tab-sessions" class="tab-content">
-            <div class="card">
-                <h3 class="card-title">👀 Активные сессии студентов</h3>
-                <div class="sessions-list" id="sessionsList"><div class="empty-state">Загрузка...</div></div>
             </div>
         </div>
     </main>

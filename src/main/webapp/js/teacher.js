@@ -3,7 +3,7 @@
  * Все JavaScript функции вынесены в отдельный файл для избежания проблем с компиляцией JSP
  */
 
-// Экранирование HTML
+// Экранирование HTML (защита от XSS)
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -14,7 +14,14 @@ function escapeHtml(text) {
 // Глобальная переменная для CSRF-токена
 let csrfToken = null;
 
-// Загрузка CSRF-токена с сервера
+// ============================================
+// CSRF-ТОКЕНЫ
+// ============================================
+
+/**
+ * Загружает CSRF-токен с сервера
+ * @returns {Promise<boolean>} true если токен успешно загружен
+ */
 async function loadCsrfToken() {
     try {
         const response = await fetch('/api/csrf/token');
@@ -33,12 +40,18 @@ async function loadCsrfToken() {
     return false;
 }
 
-// Получение CSRF-токена (вызывается из страницы)
+/**
+ * Устанавливает CSRF-токен извне (вызывается из JSP)
+ */
 window.setCsrfToken = function(token) {
     csrfToken = token;
 };
 
-// Функция для добавления CSRF-токена в FormData или URLSearchParams
+/**
+ * Добавляет CSRF-токен в FormData
+ * @param {FormData} formData - объект FormData
+ * @returns {FormData} изменённый объект FormData
+ */
 function addCsrfToFormData(formData) {
     if (csrfToken) {
         formData.append('csrf_token', csrfToken);
@@ -46,7 +59,11 @@ function addCsrfToFormData(formData) {
     return formData;
 }
 
-// Функция для добавления CSRF-токена в URLSearchParams
+/**
+ * Добавляет CSRF-токен в URLSearchParams
+ * @param {URLSearchParams} params - объект URLSearchParams
+ * @returns {URLSearchParams} изменённый объект URLSearchParams
+ */
 function addCsrfToParams(params) {
     if (csrfToken) {
         params.append('csrf_token', csrfToken);
@@ -54,7 +71,14 @@ function addCsrfToParams(params) {
     return params;
 }
 
-// Проверка аутентификации
+// ============================================
+// АУТЕНТИФИКАЦИЯ
+// ============================================
+
+/**
+ * Проверка аутентификации преподавателя
+ * При отсутствии сессии перенаправляет на страницу входа
+ */
 (async function checkAuth() {
     try {
         const response = await fetch('/api/login');
@@ -67,14 +91,23 @@ function addCsrfToParams(params) {
     }
 })();
 
-// Выход
+/**
+ * Обработчик кнопки выхода
+ */
 document.getElementById('logoutBtn').addEventListener('click', async (e) => {
     e.preventDefault();
     await fetch('/api/logout', { method: 'POST' });
     window.location.href = '/login';
 });
 
-// Обновление метки файла для SQL
+// ============================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ФАЙЛОВ
+// ============================================
+
+/**
+ * Обновляет метку файла для SQL-скрипта
+ * @param {HTMLInputElement} input - элемент input[type=file]
+ */
 function updateFileLabel(input) {
     const fileNameSpan = document.getElementById('fileName');
     const fileUpload = document.querySelector('#uploadForm .file-upload');
@@ -95,7 +128,10 @@ function updateFileLabel(input) {
     }
 }
 
-// Обновление метки файла для схемы
+/**
+ * Обновляет метку файла для схемы базы данных
+ * @param {HTMLInputElement} input - элемент input[type=file]
+ */
 function updateSchemaFileLabel(input) {
     const fileNameSpan = document.getElementById('schemaFileName');
     const fileUpload = document.querySelector('#uploadSchemaForm .file-upload');
@@ -116,7 +152,11 @@ function updateSchemaFileLabel(input) {
     }
 }
 
-// Добавление лога
+/**
+ * Добавляет сообщение в лог-контейнер
+ * @param {string} message - текст сообщения
+ * @param {string} type - тип сообщения (info, success, error, warning)
+ */
 function addLogMessage(message, type) {
     const logMessages = document.getElementById('logMessages');
     const logEntry = document.createElement('div');
@@ -128,10 +168,12 @@ function addLogMessage(message, type) {
 }
 
 // ============================================
-// РАБОТА С ПАПКАМИ
+// УПРАВЛЕНИЕ ПАПКАМИ
 // ============================================
 
-// Загрузка папок для селектора
+/**
+ * Загружает список папок для селектора (выпадающий список)
+ */
 async function loadFoldersForSelect() {
     try {
         const response = await fetch('/api/teacher?action=listFolders');
@@ -151,7 +193,9 @@ async function loadFoldersForSelect() {
     }
 }
 
-// Загрузка списка папок для отображения
+/**
+ * Загружает и отображает список всех папок с их базами данных
+ */
 async function loadFoldersList() {
     try {
         const response = await fetch('/api/teacher?action=listFolders');
@@ -187,7 +231,10 @@ async function loadFoldersList() {
     }
 }
 
-// Загрузка баз для конкретной папки
+/**
+ * Загружает базы данных для конкретной папки
+ * @param {number} folderId - идентификатор папки
+ */
 async function loadDatabasesForFolder(folderId) {
     try {
         const response = await fetch('/api/teacher?action=list');
@@ -224,7 +271,10 @@ async function loadDatabasesForFolder(folderId) {
     }
 }
 
-// Переключение отображения папки
+/**
+ * Переключает отображение содержимого папки (сворачивание/разворачивание)
+ * @param {number} folderId - идентификатор папки
+ */
 window.toggleFolder = function(folderId) {
     const dbsContainer = document.getElementById(`folder-dbs-${folderId}`);
     const toggle = dbsContainer.previousElementSibling.querySelector('.folder-toggle');
@@ -237,7 +287,9 @@ window.toggleFolder = function(folderId) {
     }
 };
 
-// Создание папки
+/**
+ * Создаёт новую папку для группировки баз данных
+ */
 document.getElementById('createFolderBtn').addEventListener('click', async () => {
     const folderName = document.getElementById('newFolderName').value.trim();
     if (!folderName) {
@@ -271,10 +323,12 @@ document.getElementById('createFolderBtn').addEventListener('click', async () =>
 });
 
 // ============================================
-// РАБОТА С БАЗАМИ ДАННЫХ
+// УПРАВЛЕНИЕ БАЗАМИ ДАННЫХ
 // ============================================
 
-// Загрузка списка баз данных для управления
+/**
+ * Загружает и отображает список всех баз данных для управления
+ */
 async function loadDatabasesList() {
     try {
         const response = await fetch('/api/teacher?action=list');
@@ -310,7 +364,9 @@ async function loadDatabasesList() {
     }
 }
 
-// Загрузка списка баз для селектора схемы
+/**
+ * Загружает список баз для селектора схемы
+ */
 async function loadDatabasesForSchemaSelect() {
     try {
         const response = await fetch('/api/teacher?action=list');
@@ -331,7 +387,9 @@ async function loadDatabasesForSchemaSelect() {
     }
 }
 
-// Показ предпросмотра схемы при выборе базы
+/**
+ * Показывает предпросмотр схемы при выборе базы данных
+ */
 const schemaSelect = document.getElementById('schemaDbSelect');
 if (schemaSelect) {
     schemaSelect.addEventListener('change', function() {
@@ -348,7 +406,9 @@ if (schemaSelect) {
     });
 }
 
-// Загрузка схемы
+/**
+ * Обработчик загрузки схемы базы данных
+ */
 const uploadSchemaForm = document.getElementById('uploadSchemaForm');
 if (uploadSchemaForm) {
     uploadSchemaForm.addEventListener('submit', async function(e) {
@@ -395,7 +455,10 @@ if (uploadSchemaForm) {
     });
 }
 
-// Удаление базы данных
+/**
+ * Удаляет базу данных
+ * @param {string} dbName - имя базы данных
+ */
 window.deleteDatabase = async function(dbName) {
     if (!confirm('Удалить базу данных "' + dbName + '"? Это действие необратимо.')) return;
 
@@ -417,6 +480,7 @@ window.deleteDatabase = async function(dbName) {
             loadFoldersList();
             loadFoldersForSelect();
             loadDatabasesForSchemaSelect();
+            loadDatabasesForMoodleSelect();
         } else {
             alert('Ошибка: ' + data.error);
         }
@@ -426,10 +490,18 @@ window.deleteDatabase = async function(dbName) {
 };
 
 // ============================================
-// РЕДАКТИРОВАНИЕ БАЗЫ ДАННЫХ
+// РЕДАКТИРОВАНИЕ МЕТАДАННЫХ БАЗЫ ДАННЫХ
 // ============================================
 
-// Открытие модального окна редактирования
+/**
+ * Открывает модальное окно редактирования базы данных
+ * @param {string} dbName - имя базы данных
+ * @param {string} displayName - отображаемое имя
+ * @param {number} folderId - идентификатор папки
+ * @param {boolean} isVisible - видимость для студентов
+ * @param {string} accessStart - дата начала доступа
+ * @param {string} accessEnd - дата окончания доступа
+ */
 window.editDatabase = function(dbName, displayName, folderId, isVisible, accessStart, accessEnd) {
     document.getElementById('editDbName').value = dbName;
     document.getElementById('editDisplayName').value = displayName || '';
@@ -475,12 +547,16 @@ window.editDatabase = function(dbName, displayName, folderId, isVisible, accessS
         });
 };
 
-// Закрытие модального окна
+/**
+ * Закрывает модальное окно редактирования
+ */
 window.closeEditModal = function() {
     document.getElementById('editDatabaseModal').style.display = 'none';
 };
 
-// Сохранение метаданных базы данных
+/**
+ * Сохраняет изменения метаданных базы данных
+ */
 window.saveDatabaseMetadata = async function() {
     const dbName = document.getElementById('editDbName').value;
     const displayName = document.getElementById('editDisplayName').value;
@@ -532,117 +608,13 @@ window.saveDatabaseMetadata = async function() {
 };
 
 // ============================================
-// МОНИТОРИНГ СЕССИЙ
+// ГЕНЕРАЦИЯ ВОПРОСОВ ДЛЯ MOODLE
 // ============================================
 
-// Загрузка сессий
-async function loadSessions() {
-    try {
-        const response = await fetch('/api/teacher?action=sessions');
-        const data = await response.json();
-        const container = document.getElementById('sessionsList');
-
-        if (data.sessions && data.sessions.length > 0) {
-            let html = '<table class="sessions-table"><thead><tr>';
-            html += '<th>IP адрес</th>';
-            html += '<th>База данных</th>';
-            html += '<th>Последний запрос</th>';
-            html += '<th>Время выполнения</th>';
-            html += '<th>Время запроса</th>';
-            html += '<th>Статус</th>';
-            html += '<th>Действия</th>';
-            html += '</tr></thead><tbody>';
-
-            for (const s of data.sessions) {
-                const time = new Date(s.lastAccess).toLocaleTimeString();
-                const shortQuery = s.lastQuery && s.lastQuery.length > 50 ? s.lastQuery.substring(0, 50) + '...' : (s.lastQuery || '—');
-                const statusClass = s.blocked ? 'status-blocked' : 'status-active';
-                const statusText = s.blocked ? '🔴 Заблокирована' : '🟢 Активна';
-
-                html += `<tr>
-                    <td>${escapeHtml(s.ipAddress || '—')}</td>
-                    <td>${escapeHtml(s.dbName || '—')}</td>
-                    <td title="${escapeHtml(s.lastQuery || '')}">${escapeHtml(shortQuery)}</td>
-                    <td>${s.lastQueryTimeMs || 0} ms</td>
-                    <td>${time}</td>
-                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                    <td>
-                        ${!s.blocked ?
-                            `<button class="btn-terminate" onclick="terminateSession('${s.sessionId}')">🔒 Завершить</button>` :
-                            `<button class="btn-terminate" style="background: var(--success); border-color: var(--success);" onclick="unblockSession('${s.sessionId}')">🔓 Разблокировать</button>`
-                        }
-                    </td>
-                </tr>`;
-            }
-            html += '</tbody></table>';
-            container.innerHTML = html;
-        } else {
-            container.innerHTML = '<div class="empty-state">Нет активных сессий</div>';
-        }
-    } catch (e) {
-        document.getElementById('sessionsList').innerHTML = '<div class="empty-state">Ошибка загрузки сессий</div>';
-    }
-}
-
-// Завершение сессии (блокировка)
-window.terminateSession = async function(sessionId) {
-    if (!confirm('Заблокировать сессию студента?')) return;
-
-    const params = new URLSearchParams();
-    params.append('action', 'terminateSession');
-    params.append('sessionId', sessionId);
-    if (csrfToken) params.append('csrf_token', csrfToken);
-
-    try {
-        const response = await fetch('/api/teacher', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params
-        });
-        const data = await response.json();
-        if (data.success) {
-            alert(data.message);
-            loadSessions();
-        } else {
-            alert('Ошибка: ' + data.error);
-        }
-    } catch (e) {
-        alert('Ошибка соединения');
-    }
-};
-
-// Разблокировка сессии
-window.unblockSession = async function(sessionId) {
-    if (!confirm('Разблокировать сессию студента?')) return;
-
-    const params = new URLSearchParams();
-    params.append('action', 'unblockSession');
-    params.append('sessionId', sessionId);
-    if (csrfToken) params.append('csrf_token', csrfToken);
-
-    try {
-        const response = await fetch('/api/teacher', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params
-        });
-        const data = await response.json();
-        if (data.success) {
-            alert(data.message);
-            loadSessions();
-        } else {
-            alert('Ошибка: ' + data.error);
-        }
-    } catch (e) {
-        alert('Ошибка соединения');
-    }
-};
-
-// ============================================
-// MOODLE ГЕНЕРАЦИЯ
-// ============================================
-
-// Обновление метки файла для Moodle
+/**
+ * Обновляет метку файла для загрузки вопросов Moodle
+ * @param {HTMLInputElement} input - элемент input[type=file]
+ */
 function updateMoodleFileLabel(input) {
     const fileNameSpan = document.getElementById('moodleFileName');
     if (!fileNameSpan) return;
@@ -655,7 +627,9 @@ function updateMoodleFileLabel(input) {
     }
 }
 
-// Загрузка списка баз для Moodle селектора
+/**
+ * Загружает список баз для селектора Moodle
+ */
 async function loadDatabasesForMoodleSelect() {
     const select = document.getElementById('moodleDbSelect');
     if (!select) return;
@@ -677,7 +651,9 @@ async function loadDatabasesForMoodleSelect() {
     }
 }
 
-// Обработчик формы Moodle
+/**
+ * Обработчик формы генерации вопросов для Moodle
+ */
 const moodleForm = document.getElementById('moodleForm');
 if (moodleForm) {
     moodleForm.addEventListener('submit', async function(e) {
@@ -743,7 +719,7 @@ if (moodleForm) {
 }
 
 // ============================================
-// ЗАГРУЗКА SQL-СКРИПТА
+// ЗАГРУЗКА SQL-СКРИПТА (СОЗДАНИЕ НОВОЙ БД)
 // ============================================
 
 const uploadForm = document.getElementById('uploadForm');
@@ -758,6 +734,7 @@ if (uploadForm) {
         const fileInput = document.getElementById('sqlFile');
         const file = fileInput.files[0];
 
+        // Валидация
         if (!dbName) {
             alert('Введите название базы данных');
             return;
@@ -771,6 +748,7 @@ if (uploadForm) {
             return;
         }
 
+        // Показываем оверлей с прогресс-баром
         const overlay = document.getElementById('loadingOverlay');
         const progressFill = document.getElementById('progressFill');
         const loadingStatus = document.getElementById('loadingStatus');
@@ -782,6 +760,7 @@ if (uploadForm) {
         logMessages.innerHTML = '';
         addLogMessage('Начало загрузки файла: ' + file.name, 'info');
 
+        // Формируем FormData для отправки
         const formData = new FormData();
         formData.append('action', 'upload');
         formData.append('dbName', dbName);
@@ -791,7 +770,9 @@ if (uploadForm) {
         if (folderId) formData.append('folderId', folderId);
         if (csrfToken) formData.append('csrf_token', csrfToken);
 
+        // Подключаемся к SSE для получения логов в реальном времени
         const eventSource = new EventSource('/api/logs');
+
         eventSource.onmessage = function(event) {
             try {
                 const data = JSON.parse(event.data);
@@ -814,12 +795,15 @@ if (uploadForm) {
                 addLogMessage(event.data, 'info');
             }
         };
+
         eventSource.onerror = function() {
             addLogMessage('⚠️ Соединение с сервером логов закрыто', 'warning');
             eventSource.close();
         };
 
+        // Отправляем файл через XHR (чтобы отслеживать прогресс загрузки)
         const xhr = new XMLHttpRequest();
+
         xhr.upload.addEventListener('progress', function(e) {
             if (e.lengthComputable) {
                 const percent = (e.loaded / e.total) * 100;
@@ -827,6 +811,7 @@ if (uploadForm) {
                 loadingStatus.textContent = 'Загрузка файла: ' + Math.round(percent) + '%';
             }
         });
+
         xhr.addEventListener('load', function() {
             if (xhr.status === 200) {
                 try {
@@ -837,18 +822,16 @@ if (uploadForm) {
                         addLogMessage('✅ База данных успешно создана!', 'success');
                         setTimeout(() => {
                             overlay.style.display = 'none';
-
+                            // Сброс формы
                             uploadForm.reset();
                             document.getElementById('fileName').textContent = 'Выберите SQL файл';
-
                             const fileUpload = document.querySelector('#uploadForm .file-upload');
                             if (fileUpload) {
                                 fileUpload.style.borderColor = 'var(--border)';
                                 fileUpload.style.background = 'var(--light)';
                             }
-
                             document.getElementById('accessPassword').value = '';
-
+                            // Обновляем списки
                             loadDatabasesList();
                             loadFoldersList();
                             loadFoldersForSelect();
@@ -869,16 +852,21 @@ if (uploadForm) {
                 alert('Ошибка соединения: ' + xhr.status);
             }
         });
+
         xhr.addEventListener('error', function() {
             overlay.style.display = 'none';
             alert('Ошибка соединения');
         });
+
         xhr.open('POST', '/api/teacher', true);
         xhr.send(formData);
     });
 }
 
-// Переключение вкладок
+// ============================================
+// ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК
+// ============================================
+
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -889,19 +877,30 @@ document.querySelectorAll('.tab').forEach(tab => {
     });
 });
 
-// Функция для получения CSRF-токена извне (устанавливается из JSP)
+// ============================================
+// ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ CSRF-ТОКЕНА ИЗ JSP
+// ============================================
+
+/**
+ * Обновляет CSRF-токен извне (устанавливается из JSP)
+ * @param {string} token - CSRF-токен
+ */
 window.updateCsrfToken = function(token) {
     csrfToken = token;
 };
 
-// Загрузка начальных данных
+// ============================================
+// ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ СТРАНИЦЫ
+// ============================================
+
+/**
+ * Загрузка начальных данных
+ */
 (async function init() {
     await loadCsrfToken();
     loadFoldersForSelect();
     loadDatabasesList();
     loadFoldersList();
-    loadSessions();
     loadDatabasesForSchemaSelect();
     loadDatabasesForMoodleSelect();
-    setInterval(loadSessions, 5000);
 })();
