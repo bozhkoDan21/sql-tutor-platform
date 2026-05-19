@@ -111,46 +111,6 @@
         .log-messages .info { color: var(--primary); }
         .log-messages .warning { color: var(--warning); }
 
-        .tabs {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
-            border-bottom: 2px solid var(--border);
-        }
-        .tab {
-            padding: 0.75rem 1.5rem;
-            background: none;
-            border: none;
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--text-light);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .tab:hover {
-            color: var(--primary);
-        }
-        .tab.active {
-            color: var(--primary);
-            border-bottom: 2px solid var(--primary);
-            margin-bottom: -2px;
-        }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-
-        .folder-create {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        .folder-create input {
-            flex: 1;
-        }
-
         .folders-list {
             display: flex;
             flex-direction: column;
@@ -237,94 +197,6 @@
             background: var(--danger);
             border-color: var(--danger);
             color: white;
-        }
-
-        .db-manager-list {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-        .db-manager-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem 1.25rem;
-            background: linear-gradient(135deg, var(--light) 0%, #f3f4f6 100%);
-            border-radius: var(--radius);
-            border: 1px solid var(--border);
-            transition: all 0.2s;
-        }
-        .db-manager-item:hover {
-            transform: translateX(4px);
-            border-color: var(--primary);
-            box-shadow: var(--shadow);
-        }
-        .db-manager-item .db-info {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-        .db-manager-item .db-name {
-            font-family: monospace;
-            font-weight: bold;
-            color: var(--primary);
-        }
-        .db-manager-item .db-meta {
-            color: var(--text-light);
-            font-size: 0.875rem;
-            background: var(--white);
-            padding: 0.25rem 0.75rem;
-            border-radius: 2rem;
-        }
-        .db-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 1rem;
-            max-width: 500px;
-            width: 90%;
-            max-height: 90%;
-            overflow-y: auto;
-        }
-        .modal-content h3 {
-            margin-bottom: 1rem;
-            color: var(--dark);
-        }
-        .form-buttons {
-            display: flex;
-            gap: 1rem;
-            justify-content: flex-end;
-            margin-top: 1.5rem;
-        }
-
-        .schema-preview {
-            margin-top: 1rem;
-            padding: 1rem;
-            background: var(--light);
-            border-radius: var(--radius);
-            display: none;
-        }
-        .schema-preview img {
-            max-width: 100%;
-            border-radius: var(--radius);
-            margin-top: 0.5rem;
         }
 
         .form-group {
@@ -504,11 +376,73 @@
             margin: 2rem auto;
             padding: 0 1.5rem;
         }
+
+        .schema-preview {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--light);
+            border-radius: var(--radius);
+            display: none;
+        }
+        .schema-preview img {
+            max-width: 100%;
+            border-radius: var(--radius);
+            margin-top: 0.5rem;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+        }
+        .modal-content h3 {
+            margin-bottom: 1rem;
+            color: var(--dark);
+        }
+        .form-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
+        }
+
+        .folder-select-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-start;
+        }
+        .folder-select-row select {
+            flex: 1;
+        }
+        .quick-folder-form {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: var(--light);
+            border-radius: var(--radius);
+        }
+        .quick-folder-form .btn {
+            margin-left: 0.5rem;
+        }
     </style>
 </head>
 <body>
 
-    <!-- Оверлей загрузки с прогресс-баром и логами -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner">
             <div class="spinner"></div>
@@ -517,7 +451,7 @@
             </div>
             <div class="loading-text" id="loadingText">Загрузка базы данных...</div>
             <div class="loading-status" id="loadingStatus">Подготовка...</div>
-            <div class="log-container" id="logContainer">
+            <div class="log-container">
                 <div class="log-header">
                     <span>📋 Детальный лог выполнения:</span>
                     <span style="font-size: 0.7rem; color: var(--text-light);" id="queryCounter">0/0 запросов</span>
@@ -527,7 +461,6 @@
         </div>
     </div>
 
-    <!-- Модальное окно редактирования базы данных -->
     <div id="editDatabaseModal" class="modal">
         <div class="modal-content">
             <h3>✏️ Редактировать базу данных</h3>
@@ -568,7 +501,7 @@
                 <label>Максимальное количество строк в результате</label>
                 <input type="number" id="editMaxRows" class="form-input" min="1" max="10000" value="20">
                 <div style="font-size: 0.7rem; color: var(--text-light); margin-top: 0.25rem;">
-                    Студент не сможет получить больше этого количества строк за один запрос. По умолчанию 20.
+                    Студент не сможет получить больше этого количества строк за один запрос.
                 </div>
             </div>
             <div class="form-buttons">
@@ -578,7 +511,6 @@
         </div>
     </div>
 
-    <!-- Навигационная панель -->
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-left">
@@ -593,30 +525,36 @@
         </div>
     </nav>
 
-    <!-- Основной контент -->
     <main class="container">
         <h2 class="page-title">Панель управления</h2>
 
-        <div class="tabs">
-            <button class="tab active" data-tab="databases">🗄️ Базы данных</button>
-            <button class="tab" data-tab="folders">📁 Папки</button>
-        </div>
-
-        <!-- Вкладка: Базы данных -->
         <div id="tab-databases" class="tab-content active">
-            <!-- Карточка загрузки новой базы данных -->
+
             <div class="card">
                 <h3 class="card-title">📤 Загрузить новую учебную базу</h3>
                 <form id="uploadForm" class="upload-form" autocomplete="off">
                     <input type="hidden" name="csrf_token" id="csrfTokenField1" value="">
+
                     <div class="form-group">
                         <label class="form-label">Название базы данных (латиница, без пробелов)</label>
                         <input type="text" id="dbName" class="form-input" placeholder="например: my_database" required>
                     </div>
+
                     <div class="form-group">
                         <label class="form-label">Папка</label>
-                        <select id="folderSelect" class="form-input" required></select>
+                        <div class="folder-select-row">
+                            <select id="folderSelect" class="form-input" required></select>
+                            <button type="button" id="quickCreateFolderBtn" class="btn btn-secondary">➕ Новая</button>
+                        </div>
+                        <div id="quickFolderForm" class="quick-folder-form" style="display: none;">
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="quickFolderName" class="form-input" placeholder="Название новой папки">
+                                <button type="button" id="quickCreateConfirmBtn" class="btn btn-primary">Создать</button>
+                                <button type="button" id="quickCreateCancelBtn" class="btn btn-secondary">Отмена</button>
+                            </div>
+                        </div>
                     </div>
+
                     <div class="form-group">
                         <label class="form-label">SQL-скрипт</label>
                         <div class="file-upload">
@@ -628,14 +566,17 @@
                         </div>
                         <div style="font-size: 0.8rem; color: var(--text-light); margin-top: 0.25rem;">Максимальный размер: 10 MB</div>
                     </div>
+
                     <div class="form-group">
                         <label class="form-label">Отображаемое имя (для студентов)</label>
                         <input type="text" id="displayName" class="form-input" placeholder="Имя для отображения студентам">
                     </div>
+
                     <div class="form-group">
                         <label class="form-label">Пароль доступа (оставьте пустым для открытого доступа)</label>
                         <input type="password" id="accessPassword" class="form-input">
                     </div>
+
                     <div class="form-group">
                         <label class="form-label">Лимит строк для студентов</label>
                         <input type="number" id="maxRows" class="form-input" min="1" max="10000" value="20">
@@ -643,13 +584,13 @@
                             Максимальное количество строк, которое студент может получить за один запрос.
                         </div>
                     </div>
+
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">Создать базу данных</button>
                     </div>
                 </form>
             </div>
 
-            <!-- Карточка загрузки схемы базы данных -->
             <div class="card">
                 <h3 class="card-title">🖼️ Загрузить схему базы данных</h3>
                 <form id="uploadSchemaForm" class="upload-form" autocomplete="off">
@@ -681,7 +622,6 @@
                 </div>
             </div>
 
-            <!-- Карточка генерации вопросов для Moodle -->
             <div class="card">
                 <h3 class="card-title">📚 Генерация вопросов для Moodle</h3>
                 <form id="moodleForm" class="upload-form" autocomplete="off">
@@ -699,9 +639,9 @@
                     <div class="form-group">
                         <label class="form-label">Формат вывода</label>
                         <select id="moodleFormat" class="form-input">
-                            <option value="gift">GIFT (рекомендуется, работает в любом Moodle)</option>
-                            <option value="xml">Moodle XML (требуется плагин CodeRunner)</option>
-                            <option value="text">Текстовый просмотр (для проверки)</option>
+                            <option value="gift">GIFT (рекомендуется)</option>
+                            <option value="xml">Moodle XML (требуется CodeRunner)</option>
+                            <option value="text">Текстовый просмотр</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -724,22 +664,11 @@
                 <div id="moodleResult" style="margin-top: 1rem; display: none;"></div>
             </div>
 
-            <!-- Карточка списка существующих баз данных -->
             <div class="card">
                 <h3 class="card-title">🗄️ Существующие базы данных</h3>
-                <div class="db-manager-list" id="databasesList"><div class="empty-state">Загрузка...</div></div>
-            </div>
-        </div>
-
-        <!-- Вкладка: Папки -->
-        <div id="tab-folders" class="tab-content">
-            <div class="card">
-                <h3 class="card-title">📁 Управление папками</h3>
-                <div class="folder-create">
-                    <input type="text" id="newFolderName" class="form-input" placeholder="Название новой папки">
-                    <button id="createFolderBtn" class="btn btn-primary">Создать папку</button>
+                <div class="folders-list" id="foldersList">
+                    <div class="empty-state">Загрузка...</div>
                 </div>
-                <div class="folders-list" id="foldersList"><div class="empty-state">Загрузка...</div></div>
             </div>
         </div>
     </main>
