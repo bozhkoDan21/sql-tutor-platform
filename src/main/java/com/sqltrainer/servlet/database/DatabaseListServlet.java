@@ -19,8 +19,9 @@ import java.util.*;
 
 /**
  * Сервлет для получения списка доступных учебных баз данных.
- * Возвращает структурированный список папок с базами данных из databases_metadata.
+ * Возвращает структурированный список папок с базами данных.
  * Учитывает видимость базы и период доступа.
+ * Также возвращает max_rows для каждой базы.
  */
 @WebServlet("/api/databases")
 public class DatabaseListServlet extends HttpServlet {
@@ -36,22 +37,14 @@ public class DatabaseListServlet extends HttpServlet {
         Map<String, Object> response = new HashMap<>();
 
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, "postgres")) {
-
-            // Получаем список папок с базами данных
             List<Map<String, Object>> folders = getFoldersWithDatabases(conn);
-
             response.put("success", true);
             response.put("folders", folders);
             response.put("count", folders.stream().mapToInt(f -> ((List<?>) f.get("databases")).size()).sum());
-
-            log.debug("Listed {} folders with databases for student", folders.size());
-
         } catch (SQLException e) {
             log.error("Failed to list databases: {}", e.getMessage());
             response.put("success", false);
             response.put("error", "Не удалось загрузить список баз данных: " + e.getMessage());
-
-            // При ошибке подключения очищаем кеш
             QueryExecutor.clearCache();
         }
 
@@ -61,6 +54,7 @@ public class DatabaseListServlet extends HttpServlet {
     /**
      * Возвращает список папок с базами данных, доступными студентам.
      * Учитывает видимость базы и период доступа.
+     * Включает поле max_rows для каждой базы.
      */
     private List<Map<String, Object>> getFoldersWithDatabases(Connection conn) throws SQLException {
         List<Map<String, Object>> folders = new ArrayList<>();
@@ -72,7 +66,8 @@ public class DatabaseListServlet extends HttpServlet {
                         "   dm.db_name, " +
                         "   dm.display_name, " +
                         "   dm.access_password_hash, " +
-                        "   dm.schema_image_url " +
+                        "   dm.schema_image_url, " +
+                        "   dm.max_rows " +
                         "FROM database_folders df " +
                         "LEFT JOIN databases_metadata dm ON dm.folder_id = df.id " +
                         "WHERE dm.is_visible = true " +
@@ -89,7 +84,6 @@ public class DatabaseListServlet extends HttpServlet {
                 long folderId = rs.getLong("folder_id");
                 String folderName = rs.getString("folder_name");
 
-                // Получаем или создаём папку
                 Map<String, Object> folder = folderMap.get(folderId);
                 if (folder == null) {
                     folder = new LinkedHashMap<>();
@@ -99,7 +93,6 @@ public class DatabaseListServlet extends HttpServlet {
                     folderMap.put(folderId, folder);
                 }
 
-                // Добавляем базу данных в папку (если есть)
                 String dbName = rs.getString("db_name");
                 if (dbName != null && !dbName.isEmpty()) {
                     Map<String, Object> database = new LinkedHashMap<>();
@@ -107,6 +100,7 @@ public class DatabaseListServlet extends HttpServlet {
                     database.put("displayName", rs.getString("display_name"));
                     database.put("hasPassword", rs.getString("access_password_hash") != null);
                     database.put("schemaImageUrl", rs.getString("schema_image_url"));
+                    database.put("maxRows", rs.getInt("max_rows"));
 
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> dbList = (List<Map<String, Object>>) folder.get("databases");

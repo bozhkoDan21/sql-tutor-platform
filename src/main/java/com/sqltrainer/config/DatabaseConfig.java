@@ -6,6 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
@@ -36,7 +38,6 @@ public class DatabaseConfig {
 
     // Ограничения для безопасности
     private static final int QUERY_TIMEOUT_SEC = Integer.parseInt(System.getenv().getOrDefault("QUERY_TIMEOUT_SEC", "3"));
-    private static final int MAX_ROWS = Integer.parseInt(System.getenv().getOrDefault("MAX_ROWS", "1000"));
     private static final int CONNECTION_TIMEOUT_MS = Integer.parseInt(System.getenv().getOrDefault("CONNECTION_TIMEOUT_MS", "5000"));
 
     static {
@@ -223,7 +224,26 @@ public class DatabaseConfig {
         return QUERY_TIMEOUT_SEC;
     }
 
-    public static int getMaxRows() {
-        return MAX_ROWS;
+    /**
+     * Возвращает максимальное количество строк для указанной базы данных.
+     * Значение берётся из таблицы databases_metadata (поле max_rows).
+     * Если значение не задано или равно 0, возвращается 20 по умолчанию.
+     *
+     * @param dbName имя базы данных
+     * @return максимальное количество строк, которое может вернуть SELECT-запрос студента
+     */
+    public static int getMaxRowsForDatabase(String dbName) {
+        try (Connection conn = getConnection(Role.ADMIN, null);
+             PreparedStatement stmt = conn.prepareStatement("SELECT max_rows FROM databases_metadata WHERE db_name = ?")) {
+            stmt.setString(1, dbName);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                int maxRows = rs.getInt("max_rows");
+                return maxRows > 0 ? maxRows : 20;
+            }
+        } catch (SQLException e) {
+            log.warn("Failed to get max_rows for database {}, using default 20", dbName, e);
+        }
+        return 20;
     }
 }

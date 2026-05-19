@@ -12,7 +12,6 @@
     <title>SQL Trainer - Панель преподавателя</title>
     <link rel="stylesheet" href="/css/style.css?v=2">
     <style>
-        /* Стили для модального окна загрузки с прогресс-баром */
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -112,7 +111,6 @@
         .log-messages .info { color: var(--primary); }
         .log-messages .warning { color: var(--warning); }
 
-        /* Вкладки */
         .tabs {
             display: flex;
             gap: 0.5rem;
@@ -144,7 +142,6 @@
             display: block;
         }
 
-        /* Форма создания папки */
         .folder-create {
             display: flex;
             gap: 0.5rem;
@@ -154,7 +151,6 @@
             flex: 1;
         }
 
-        /* Список папок */
         .folders-list {
             display: flex;
             flex-direction: column;
@@ -243,7 +239,6 @@
             color: white;
         }
 
-        /* Список баз для управления */
         .db-manager-list {
             display: flex;
             flex-direction: column;
@@ -287,7 +282,6 @@
             gap: 0.5rem;
         }
 
-        /* Модальное окно редактирования */
         .modal {
             display: none;
             position: fixed;
@@ -320,7 +314,6 @@
             margin-top: 1.5rem;
         }
 
-        /* Загрузка схемы */
         .schema-preview {
             margin-top: 1rem;
             padding: 1rem;
@@ -334,7 +327,6 @@
             margin-top: 0.5rem;
         }
 
-        /* Общие стили форм */
         .form-group {
             margin-bottom: 1rem;
         }
@@ -515,6 +507,7 @@
     </style>
 </head>
 <body>
+
     <!-- Оверлей загрузки с прогресс-баром и логами -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner">
@@ -571,6 +564,13 @@
                 <label>Конец доступа (оставьте пустым для безлимита)</label>
                 <input type="date" id="editAccessEnd" class="form-input">
             </div>
+            <div class="form-group">
+                <label>Максимальное количество строк в результате</label>
+                <input type="number" id="editMaxRows" class="form-input" min="1" max="10000" value="20">
+                <div style="font-size: 0.7rem; color: var(--text-light); margin-top: 0.25rem;">
+                    Студент не сможет получить больше этого количества строк за один запрос. По умолчанию 20.
+                </div>
+            </div>
             <div class="form-buttons">
                 <button class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
                 <button class="btn btn-primary" onclick="saveDatabaseMetadata()">Сохранить</button>
@@ -596,10 +596,12 @@
     <!-- Основной контент -->
     <main class="container">
         <h2 class="page-title">Панель управления</h2>
+
         <div class="tabs">
             <button class="tab active" data-tab="databases">🗄️ Базы данных</button>
             <button class="tab" data-tab="folders">📁 Папки</button>
         </div>
+
         <!-- Вкладка: Базы данных -->
         <div id="tab-databases" class="tab-content active">
             <!-- Карточка загрузки новой базы данных -->
@@ -633,6 +635,13 @@
                     <div class="form-group">
                         <label class="form-label">Пароль доступа (оставьте пустым для открытого доступа)</label>
                         <input type="password" id="accessPassword" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Лимит строк для студентов</label>
+                        <input type="number" id="maxRows" class="form-input" min="1" max="10000" value="20">
+                        <div style="font-size: 0.7rem; color: var(--text-light); margin-top: 0.25rem;">
+                            Максимальное количество строк, которое студент может получить за один запрос.
+                        </div>
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">Создать базу данных</button>
@@ -735,7 +744,6 @@
         </div>
     </main>
 
-    <!-- Подключение JavaScript -->
     <script src="/js/teacher.js?v=3"></script>
 </body>
 </html>

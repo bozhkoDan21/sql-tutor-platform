@@ -31,10 +31,8 @@ import java.util.regex.Pattern;
  * - Загрузка схемы БД (изображение)
  * - Удаление существующих БД
  * - Управление папками (категориями)
- * - Управление метаданными БД (видимость, пароль, период доступа)
+ * - Управление метаданными БД (видимость, пароль, период доступа, лимит строк)
  * - Генерация вопросов для Moodle
- *
- * Мониторинг сессий студентов УДАЛЁН по требованию.
  */
 @WebServlet("/api/teacher")
 @MultipartConfig(
@@ -53,9 +51,7 @@ public class TeacherServlet extends HttpServlet {
     private static final Pattern DB_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     // Защищённые базы данных (системные PostgreSQL) — нельзя удалить
-    private static final Set<String> PROTECTED_DATABASES = new HashSet<>(Arrays.asList(
-            Constants.PROTECTED_DATABASES
-    ));
+    private static final Set<String> PROTECTED_DATABASES = new HashSet<>(Arrays.asList(Constants.PROTECTED_DATABASES));
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
@@ -76,8 +72,9 @@ public class TeacherServlet extends HttpServlet {
                     String folderId = req.getParameter("folderId");
                     String displayName = req.getParameter("displayName");
                     String accessPassword = req.getParameter("accessPassword");
+                    String maxRows = req.getParameter("maxRows");  // лимит строк для студентов
                     Part filePart = req.getPart("sqlFile");
-                    handleUpload(conn, dbName, folderId, displayName, accessPassword, filePart, response);
+                    handleUpload(conn, dbName, folderId, displayName, accessPassword, maxRows, filePart, response);
                     break;
 
                 case "uploadSchema":
@@ -120,8 +117,9 @@ public class TeacherServlet extends HttpServlet {
                     String isVisible = req.getParameter("isVisible");
                     String accessStart = req.getParameter("accessStart");
                     String accessEnd = req.getParameter("accessEnd");
+                    String updateMaxRows = req.getParameter("maxRows");  // лимит строк для студентов
                     handleUpdateDatabaseMetadata(conn, updateDbName, updateDisplayName, updateFolderId,
-                            updateAccessPassword, isVisible, accessStart, accessEnd, removePassword, response);
+                            updateAccessPassword, isVisible, accessStart, accessEnd, removePassword, updateMaxRows, response);
                     break;
 
                 // ========== НЕИЗВЕСТНОЕ ДЕЙСТВИЕ ==========
@@ -233,28 +231,30 @@ public class TeacherServlet extends HttpServlet {
     /**
      * Обновляет метаданные базы данных.
      *
-     * Поля для обновления:
-     * - Отображаемое имя (display_name)
-     * - Папка (folder_id)
-     * - Пароль доступа (access_password_hash)
-     * - Видимость для студентов (is_visible)
-     * - Период доступа (access_start, access_end)
+     * Позволяет изменить:
+     * - отображаемое имя
+     * - папку
+     * - пароль доступа (или удалить его)
+     * - видимость для студентов
+     * - период доступа (даты начала и окончания)
+     * - максимальное количество строк для студентов (max_rows)
      *
      * @param conn               соединение с БД
-     * @param dbName             имя базы данных (идентификатор)
-     * @param displayName        отображаемое имя
-     * @param folderId           идентификатор папки
-     * @param accessPassword     новый пароль доступа (если не пуст)
+     * @param dbName             имя базы данных
+     * @param displayName        новое отображаемое имя
+     * @param folderId           новый идентификатор папки
+     * @param accessPassword     новый пароль (если указан)
      * @param isVisible          видимость для студентов ("true"/"false")
-     * @param accessStartStr     дата начала доступа (yyyy-MM-dd)
-     * @param accessEndStr       дата окончания доступа (yyyy-MM-dd)
-     * @param removePasswordParam флаг удаления пароля ("true"/null)
-     * @param response           объект для формирования ответа
+     * @param accessStartStr     дата начала доступа
+     * @param accessEndStr       дата окончания доступа
+     * @param removePasswordParam флаг удаления пароля
+     * @param maxRows            новое максимальное количество строк
+     * @param response           объект для ответа клиенту
      */
     private void handleUpdateDatabaseMetadata(Connection conn, String dbName, String displayName,
                                               String folderId, String accessPassword, String isVisible,
                                               String accessStartStr, String accessEndStr,
-                                              String removePasswordParam,
+                                              String removePasswordParam, String maxRows,
                                               Map<String, Object> response) {
         if (dbName == null || dbName.isEmpty()) {
             response.put("error", "Не указано имя базы данных");
@@ -303,6 +303,12 @@ public class TeacherServlet extends HttpServlet {
                 params.add(accessEndStr);
             }
 
+            // Обновление лимита строк для студентов
+            if (maxRows != null && !maxRows.isEmpty()) {
+                sql.append("max_rows = ?, ");
+                params.add(Integer.parseInt(maxRows));
+            }
+
             if (params.isEmpty()) {
                 response.put("error", "Нет полей для обновления");
                 return;
@@ -321,8 +327,7 @@ public class TeacherServlet extends HttpServlet {
                 if (updated > 0) {
                     response.put("success", true);
                     response.put("message", "Метаданные базы данных обновлены");
-                    QueryExecutor.clearCache(); // Очищаем кэш запросов
-                    log.info("Database metadata updated for: {}", dbName);
+                    QueryExecutor.clearCache();  // Очищаем кэш запросов
                 } else {
                     response.put("error", "База данных не найдена");
                 }
@@ -339,17 +344,15 @@ public class TeacherServlet extends HttpServlet {
 
     /**
      * Загружает схему базы данных (изображение со связями таблиц).
+     * Изображение сохраняется в файловую систему, в БД сохраняется только путь.
+     * При загрузке нового изображения старое удаляется.
      *
-     * Изображение сохраняется в папку /uploads/schemas/ внутри контейнера Tomcat.
-     * Старое изображение удаляется при замене.
-     *
-     * @param conn       соединение с БД
-     * @param dbName     имя базы данных
-     * @param imagePart  файл изображения (JPEG, PNG, GIF)
-     * @param response   объект для формирования ответа
-     * @throws SQLException при ошибке выполнения запроса
+     * @param conn      соединение с БД
+     * @param dbName    имя базы данных
+     * @param imagePart файл изображения (JPEG, PNG, GIF)
+     * @param response  объект для формирования ответа клиенту
      */
-    private void handleUploadSchemaImage(Connection conn, String dbName, Part imagePart, Map<String, Object> response) throws SQLException {
+    private void handleUploadSchemaImage(Connection conn, String dbName, Part imagePart, Map<String, Object> response) {
         // Валидация имени БД
         if (dbName == null || dbName.isEmpty()) {
             response.put("error", "Не указано имя базы данных");
@@ -393,6 +396,7 @@ public class TeacherServlet extends HttpServlet {
 
         java.io.File destFile = new java.io.File(uploadDir, fileName);
         try {
+            // Сохраняем файл на диск
             imagePart.write(destFile.getAbsolutePath());
             log.info("Image saved to: {}", destFile.getAbsolutePath());
 
@@ -434,6 +438,9 @@ public class TeacherServlet extends HttpServlet {
         } catch (IOException e) {
             log.error("Failed to upload schema image: {}", e.getMessage());
             response.put("error", "Ошибка загрузки изображения: " + e.getMessage());
+        } catch (SQLException e) {
+            log.error("Database error while uploading schema image: {}", e.getMessage());
+            response.put("error", "Ошибка базы данных: " + e.getMessage());
         }
     }
 
@@ -449,20 +456,22 @@ public class TeacherServlet extends HttpServlet {
      * 2. Создание физической БД в PostgreSQL
      * 3. Выполнение SQL-скрипта с логированием прогресса через SSE
      * 4. Настройка прав доступа для ролей students и teacher_role
-     * 5. Сохранение метаданных в таблицу databases_metadata
+     * 5. Сохранение метаданных в таблицу databases_metadata (включая max_rows)
      *
      * @param conn           соединение с БД
      * @param dbName         имя новой базы данных
      * @param folderId       идентификатор папки
      * @param displayName    отображаемое имя
      * @param accessPassword пароль доступа
+     * @param maxRows        максимальное количество строк для студентов (по умолчанию 20)
      * @param filePart       SQL файл
      * @param response       объект для формирования ответа
      * @throws IOException  при ошибке чтения файла
      * @throws SQLException при ошибке выполнения SQL
      */
-    private void handleUpload(Connection conn, String dbName, String folderId, String displayName, String accessPassword,
-                              Part filePart, Map<String, Object> response) throws IOException, SQLException {
+    private void handleUpload(Connection conn, String dbName, String folderId, String displayName,
+                              String accessPassword, String maxRows, Part filePart, Map<String, Object> response)
+            throws IOException, SQLException {
 
         // ===== ВАЛИДАЦИЯ =====
 
@@ -583,6 +592,7 @@ public class TeacherServlet extends HttpServlet {
         // ===== СОХРАНЕНИЕ МЕТАДАННЫХ =====
 
         if (folderId != null && !folderId.isEmpty()) {
+            // Хешируем пароль, если он указан
             String passwordHash = null;
             if (accessPassword != null && !accessPassword.isEmpty()) {
                 passwordHash = BCrypt.hashpw(accessPassword, BCrypt.gensalt());
@@ -590,13 +600,25 @@ public class TeacherServlet extends HttpServlet {
 
             String displayNameValue = displayName != null && !displayName.isEmpty() ? displayName : dbName;
 
-            String metadataSql = "INSERT INTO databases_metadata (db_name, folder_id, display_name, access_password_hash, created_by) " +
-                    "VALUES (?, ?, ?, ?, 'teacher')";
+            // Устанавливаем лимит строк (по умолчанию 20)
+            int maxRowsValue = 20;
+            if (maxRows != null && !maxRows.isEmpty()) {
+                try {
+                    maxRowsValue = Integer.parseInt(maxRows);
+                    if (maxRowsValue < 1) maxRowsValue = 20;
+                } catch (NumberFormatException e) {
+                    maxRowsValue = 20;
+                }
+            }
+
+            String metadataSql = "INSERT INTO databases_metadata (db_name, folder_id, display_name, access_password_hash, max_rows, created_by) " +
+                    "VALUES (?, ?, ?, ?, ?, 'teacher')";
             try (PreparedStatement stmt = conn.prepareStatement(metadataSql)) {
                 stmt.setString(1, dbName);
                 stmt.setLong(2, Long.parseLong(folderId));
                 stmt.setString(3, displayNameValue);
                 stmt.setString(4, passwordHash);
+                stmt.setInt(5, maxRowsValue);
                 stmt.executeUpdate();
             } catch (SQLException e) {
                 log.warn("Failed to insert database metadata: {}", e.getMessage());
@@ -829,16 +851,17 @@ public class TeacherServlet extends HttpServlet {
 
     /**
      * Возвращает список баз данных для отображения преподавателю.
+     * Включает поле max_rows.
      *
      * @param conn соединение с БД
-     * @return список баз данных
+     * @return список баз данных с метаданными
      * @throws SQLException при ошибке выполнения запроса
      */
     private List<Map<String, Object>> getDatabaseList(Connection conn) throws SQLException {
         List<Map<String, Object>> databases = new ArrayList<>();
         String sql = "SELECT dm.db_name, dm.display_name, df.name as folder_name, " +
                 "dm.folder_id, dm.is_visible, dm.access_start, dm.access_end, " +
-                "dm.schema_image_url, dm.access_password_hash " +
+                "dm.schema_image_url, dm.access_password_hash, dm.max_rows " +
                 "FROM databases_metadata dm " +
                 "JOIN database_folders df ON dm.folder_id = df.id";
 
@@ -854,6 +877,7 @@ public class TeacherServlet extends HttpServlet {
                 db.put("accessStart", rs.getDate("access_start"));
                 db.put("accessEnd", rs.getDate("access_end"));
                 db.put("schemaImageUrl", rs.getString("schema_image_url"));
+                db.put("maxRows", rs.getInt("max_rows"));
 
                 String passwordHash = rs.getString("access_password_hash");
                 db.put("hasPassword", passwordHash != null && !passwordHash.isEmpty());
@@ -882,6 +906,10 @@ public class TeacherServlet extends HttpServlet {
         }
         return null;
     }
+
+    // ============================================
+    // УДАЛЕНИЕ БАЗЫ ДАННЫХ
+    // ============================================
 
     /**
      * Удаляет базу данных.

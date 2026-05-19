@@ -232,7 +232,9 @@ async function loadFoldersList() {
 }
 
 /**
- * Загружает базы данных для конкретной папки
+ * Загружает базы данных для конкретной папки.
+ * Отображает название базы, отображаемое имя и лимит строк.
+ *
  * @param {number} folderId - идентификатор папки
  */
 async function loadDatabasesForFolder(folderId) {
@@ -253,9 +255,10 @@ async function loadDatabasesForFolder(folderId) {
                             <div>
                                 <span class="folder-db-name">${escapeHtml(db.dbName)}</span>
                                 <span class="folder-db-display">(${escapeHtml(db.displayName)})</span>
+                                <span class="folder-db-display">📊 лимит: ${db.maxRows || 20} строк</span>
                             </div>
                             <div class="db-actions">
-                                <button class="btn-edit" onclick="editDatabase('${escapeHtml(db.dbName)}', '${escapeHtml(db.displayName)}', ${db.folderId || 0}, ${isVisible}, '${escapeHtml(db.accessStart || '')}', '${escapeHtml(db.accessEnd || '')}')">✏️ Редактировать</button>
+                                <button class="btn-edit" onclick="editDatabase('${escapeHtml(db.dbName)}', '${escapeHtml(db.displayName)}', ${db.folderId || 0}, ${isVisible}, '${escapeHtml(db.accessStart || '')}', '${escapeHtml(db.accessEnd || '')}', ${db.maxRows || 20})">✏️ Редактировать</button>
                                 <button class="btn-delete" onclick="deleteDatabase('${escapeHtml(db.dbName)}')">Удалить</button>
                             </div>
                         </div>
@@ -494,19 +497,22 @@ window.deleteDatabase = async function(dbName) {
 // ============================================
 
 /**
- * Открывает модальное окно редактирования базы данных
+ * Открывает модальное окно редактирования базы данных.
+ *
  * @param {string} dbName - имя базы данных
  * @param {string} displayName - отображаемое имя
  * @param {number} folderId - идентификатор папки
  * @param {boolean} isVisible - видимость для студентов
  * @param {string} accessStart - дата начала доступа
  * @param {string} accessEnd - дата окончания доступа
+ * @param {number} maxRows - максимальное количество строк
  */
-window.editDatabase = function(dbName, displayName, folderId, isVisible, accessStart, accessEnd) {
+window.editDatabase = function(dbName, displayName, folderId, isVisible, accessStart, accessEnd, maxRows) {
     document.getElementById('editDbName').value = dbName;
     document.getElementById('editDisplayName').value = displayName || '';
     document.getElementById('editAccessPassword').value = '';
     document.getElementById('editRemovePasswordCheckbox').checked = false;
+    document.getElementById('editMaxRows').value = maxRows || 20;
 
     const visibleValue = (isVisible !== undefined && isVisible !== null) ? isVisible : true;
     document.getElementById('editIsVisible').value = visibleValue ? 'true' : 'false';
@@ -514,7 +520,6 @@ window.editDatabase = function(dbName, displayName, folderId, isVisible, accessS
     document.getElementById('editAccessStart').value = accessStart || '';
     document.getElementById('editAccessEnd').value = accessEnd || '';
 
-    // Устанавливаем CSRF-токен в модальное окно
     const editCsrfField = document.getElementById('editCsrfToken');
     if (editCsrfField && csrfToken) {
         editCsrfField.value = csrfToken;
@@ -555,7 +560,7 @@ window.closeEditModal = function() {
 };
 
 /**
- * Сохраняет изменения метаданных базы данных
+ * Сохраняет изменения метаданных базы данных.
  */
 window.saveDatabaseMetadata = async function() {
     const dbName = document.getElementById('editDbName').value;
@@ -566,6 +571,7 @@ window.saveDatabaseMetadata = async function() {
     const isVisible = document.getElementById('editIsVisible').value;
     const accessStart = document.getElementById('editAccessStart').value;
     const accessEnd = document.getElementById('editAccessEnd').value;
+    const maxRows = document.getElementById('editMaxRows').value;
 
     const formData = new URLSearchParams();
     formData.append('action', 'updateDatabaseMetadata');
@@ -583,6 +589,7 @@ window.saveDatabaseMetadata = async function() {
     formData.append('isVisible', isVisible);
     if (accessStart) formData.append('accessStart', accessStart);
     if (accessEnd) formData.append('accessEnd', accessEnd);
+    if (maxRows) formData.append('maxRows', maxRows);
 
     try {
         const response = await fetch('/api/teacher', {
@@ -734,6 +741,10 @@ if (uploadForm) {
         const fileInput = document.getElementById('sqlFile');
         const file = fileInput.files[0];
 
+        // Получаем значение maxRows из формы (лимит строк для студентов)
+        const maxRowsInput = document.getElementById('maxRows');
+        const maxRows = maxRowsInput ? maxRowsInput.value : '20';
+
         // Валидация
         if (!dbName) {
             alert('Введите название базы данных');
@@ -768,6 +779,7 @@ if (uploadForm) {
         if (displayName) formData.append('displayName', displayName);
         if (accessPassword) formData.append('accessPassword', accessPassword);
         if (folderId) formData.append('folderId', folderId);
+        if (maxRows) formData.append('maxRows', maxRows);
         if (csrfToken) formData.append('csrf_token', csrfToken);
 
         // Подключаемся к SSE для получения логов в реальном времени

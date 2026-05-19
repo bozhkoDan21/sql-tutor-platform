@@ -167,6 +167,15 @@ public class QueryExecutor {
         return executeSingleQuery(dbName, lastSelect, needExplain);
     }
 
+    /**
+     * Выполняет SELECT-запрос от имени студента.
+     * Применяются ограничения: таймаут, максимальное количество строк из метаданных БД.
+     *
+     * @param dbName имя базы данных
+     * @param sql SQL-запрос
+     * @param needExplain флаг, нужно ли выполнять EXPLAIN ANALYZE
+     * @return результат выполнения запроса
+     */
     private static QueryResult executeSingleQuery(String dbName, String sql, boolean needExplain) {
         String sqlLower = sql.toLowerCase();
 
@@ -188,15 +197,22 @@ public class QueryExecutor {
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.STUDENT, dbName);
              Statement stmt = conn.createStatement()) {
 
+            // Устанавливаем таймаут выполнения запроса (из переменных окружения)
             stmt.setQueryTimeout(DatabaseConfig.getQueryTimeout());
-            stmt.setMaxRows(DatabaseConfig.getMaxRows());
 
+            // Получаем лимит строк для этой базы из метаданных (по умолчанию 20)
+            int maxRows = DatabaseConfig.getMaxRowsForDatabase(dbName);
+            stmt.setMaxRows(maxRows);
+            log.debug("Setting max_rows={} for database {}", maxRows, dbName);
+
+            // Если нужно, получаем план выполнения запроса
             if (needExplain) {
                 ExplainResult explainResult = getExplainPlan(stmt, sql);
                 result.setExplainJson(explainResult.json);
                 result.setExplainText(explainResult.text);
             }
 
+            // Выполняем сам запрос
             try (ResultSet rs = stmt.executeQuery(sql)) {
                 ResultSetMetaData meta = rs.getMetaData();
                 int columnCount = meta.getColumnCount();
@@ -222,16 +238,12 @@ public class QueryExecutor {
             long executionTime = System.currentTimeMillis() - startTime;
             result.setExecutionTimeMs(executionTime);
 
-            // Генерируем подпись для результата
+            // Генерируем подпись для верификации CSV
             String signature = generateSignature(sql, executionTime, result.getRowCount(), dbName);
             result.setSignature(signature);
 
+            // Сохраняем в кэш на 30 секунд
             cache.put(cacheKey, result);
-
-            if (log.isDebugEnabled()) {
-                log.debug("Query executed: {} rows in {} ms on database {} (explain: {})",
-                        result.getRowCount(), executionTime, dbName, needExplain);
-            }
 
         } catch (SQLException e) {
             String errorMsg = handleSQLError(e);

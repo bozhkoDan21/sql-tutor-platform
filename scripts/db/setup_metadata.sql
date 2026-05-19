@@ -56,6 +56,7 @@ CREATE TABLE databases_metadata (
     access_start DATE,
     access_end DATE,
     schema_image_url VARCHAR(500),
+    max_rows INTEGER DEFAULT 20,
     created_by VARCHAR(100) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -101,9 +102,5 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON database_folders TO teacher_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON databases_metadata TO teacher_role;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO teacher_role;
 
--- ============================================
--- ВЕРБАЛЬНОЕ ПОДТВЕРЖДЕНИЕ
--- ============================================
-
-SELECT '✅ Таблицы метаданных баз данных созданы' as message;
-SELECT '✅ Роли и права для teacher_role настроены' as message;
+SELECT 'Таблицы метаданных баз данных созданы' as message;
+SELECT 'Роли и права для teacher_role настроены' as message;
