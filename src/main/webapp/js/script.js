@@ -790,6 +790,11 @@ function downloadCSV() {
         return;
     }
 
+    // Получаем выбранный разделитель
+    const separatorSelect = document.getElementById('csvSeparator');
+    let separator = separatorSelect ? separatorSelect.value : ',';
+    if (separator === 'tab') separator = '\t';
+
     const resultContainer = document.getElementById('resultContainer');
     if (resultContainer) {
         resultContainer.innerHTML = '<div class="empty-state">⏳ Подготовка файла...</div>';
@@ -812,8 +817,6 @@ function downloadCSV() {
             return;
         }
 
-        // Используем ТОЛЬКО подпись с сервера
-        // Если сервер не вернул подпись - это ошибка, файл не должен быть сгенерирован
         if (!data.signature) {
             console.error('Server signature missing');
             if (resultContainer) {
@@ -829,24 +832,27 @@ function downloadCSV() {
         csv += `# Database: ${selectedDb}\n`;
         csv += `# Execution Time: ${data.executionTimeMs} ms\n`;
         csv += `# Rows: ${data.rows.length}\n`;
+        csv += `# Separator: ${separatorSelect ? separatorSelect.value : ','}\n`;
         csv += `# Generated: ${new Date().toLocaleString()}\n`;
         csv += `# Signature: ${signature}\n`;
         csv += '\n';
 
-        csv += data.columns.join(',') + '\n';
+        // Используем выбранный разделитель
+        csv += data.columns.join(separator) + '\n';
 
         data.rows.forEach(row => {
             const rowData = data.columns.map(col => {
                 let value = row[col];
                 if (value === null) return 'NULL';
                 if (typeof value === 'string') {
-                    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                    // Если значение содержит разделитель или кавычки, оборачиваем в двойные кавычки
+                    if (value.includes(separator) || value.includes('"') || value.includes('\n')) {
                         return `"${value.replace(/"/g, '""')}"`;
                     }
                 }
                 return value;
             });
-            csv += rowData.join(',') + '\n';
+            csv += rowData.join(separator) + '\n';
         });
 
         const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });

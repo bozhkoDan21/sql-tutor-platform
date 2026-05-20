@@ -137,6 +137,16 @@
                             <button id="formatBtn" class="btn btn-secondary" title="Форматировать SQL (Ctrl+Shift+F)">✨ Формат</button>
                             <button id="downloadBtn" class="btn btn-secondary">📥 Скачать CSV</button>
 
+                            <label class="separator-label">
+                                Разделитель:
+                                <select id="csvSeparator" class="separator-select">
+                                    <option value=",">Запятая (,)</option>
+                                    <option value=";">Точка с запятой (;)</option>
+                                    <option value="tab">Табуляция</option>
+                                    <option value="|">Вертикальная черта (|)</option>
+                                </select>
+                            </label>
+
                             <label class="explain-checkbox" title="Показывать план выполнения запроса">
                                 <input type="checkbox" id="showExplainCheckbox">
                                 <span class="checkbox-icon">📊</span>
