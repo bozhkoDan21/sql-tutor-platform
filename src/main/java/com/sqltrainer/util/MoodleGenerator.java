@@ -15,9 +15,27 @@ import java.util.List;
 /**
  * Генератор вопросов для Moodle в форматах GIFT и XML.
  * Для табличных ответов используется SHA-256 хеш результата запроса.
+ *
+ * Принцип работы:
+ * 1. Преподаватель создаёт текстовый файл с парами "вопрос" + "SQL запрос"
+ * 2. Система выполняет эталонные запросы к учебной БД
+ * 3. Для SELECT-запросов вычисляется SHA-256 хеш результата (16 символов)
+ * 4. Генерируется GIFT/XML файл для импорта в Moodle
+ * 5. В Moodle правильным ответом считается хеш, введённый студентом
+ *
+ * Проверка ответа студента:
+ * - Студент выполняет запрос в SQL Trainer
+ * - Система показывает хеш результата (16 символов)
+ * - Студент копирует хеш в Moodle
+ * - Moodle сравнивает введённый хеш с эталонным
+ * - При несовпадении преподаватель может экспортировать CSV и сравнить детально
  */
 public class MoodleGenerator {
     private static final Logger log = LoggerFactory.getLogger(MoodleGenerator.class);
+
+    // Максимальное количество строк, используемых для вычисления хеша
+    // (предотвращает проблему с памятью при очень больших результатах)
+    private static final int MAX_ROWS_FOR_HASH = 10000;
 
     /**
      * Структура вопроса.
@@ -50,6 +68,17 @@ public class MoodleGenerator {
     /**
      * Парсит входной файл с заданиями.
      * Формат: каждая пара строк: текст вопроса, затем SQL запрос.
+     *
+     * Пример входного файла:
+     * Найти всех студентов, родившихся после 2000 года
+     * SELECT * FROM student WHERE birth_date > '2000-01-01' LIMIT 10;
+     *
+     * Посчитать количество студентов в каждом городе
+     * SELECT city_id, COUNT(*) FROM student GROUP BY city_id;
+     *
+     * @param inputStream поток входного файла
+     * @return список вопросов
+     * @throws IOException если файл имеет неверный формат
      */
     public static List<Question> parseQuestions(InputStream inputStream) throws IOException {
         List<Question> questions = new ArrayList<>();
@@ -86,6 +115,20 @@ public class MoodleGenerator {
 
     /**
      * Выполняет запросы и получает эталонные результаты и хеши.
+     *
+     * Для SELECT-запросов:
+     * - Выполняется запрос к учебной БД
+     * - Результат преобразуется в строку вида "value1|value2|value3\n..."
+     * - Вычисляется SHA-256 хеш от этой строки
+     * - Хеш усекается до 16 символов для удобства ввода студентом
+     *
+     * Для UPDATE/INSERT/DELETE:
+     * - Выполняется запрос
+     * - Сохраняется количество затронутых строк
+     *
+     * @param questions список вопросов
+     * @param dbName имя базы данных
+     * @return список вопросов с заполненными эталонными результатами
      */
     public static List<Question> executeQueries(List<Question> questions, String dbName) {
         for (Question q : questions) {
@@ -102,34 +145,46 @@ public class MoodleGenerator {
                         ResultSetMetaData meta = rs.getMetaData();
                         int columnCount = meta.getColumnCount();
 
-                        StringBuilder resultBuilder = new StringBuilder();
                         StringBuilder hashBuilder = new StringBuilder();
+                        StringBuilder resultBuilder = new StringBuilder();
                         int rowCount = 0;
 
-                        while (rs.next()) {
+                        // Ограничиваем количество строк для хеша, чтобы избежать проблем с памятью
+                        while (rs.next() && rowCount < MAX_ROWS_FOR_HASH) {
                             rowCount++;
                             for (int i = 1; i <= columnCount; i++) {
                                 if (i > 1) {
-                                    resultBuilder.append(", ");
                                     hashBuilder.append("|");
+                                    if (resultBuilder.length() > 0) resultBuilder.append(", ");
                                 }
                                 String value = rs.getString(i);
                                 if (value == null) value = "NULL";
-                                resultBuilder.append(value);
                                 hashBuilder.append(value);
+                                resultBuilder.append(value);
                             }
-                            resultBuilder.append("\n");
                             hashBuilder.append("\n");
+                            resultBuilder.append("\n");
+                        }
+
+                        // Если строк больше чем MAX_ROWS_FOR_HASH, добавляем предупреждение
+                        if (rowCount >= MAX_ROWS_FOR_HASH) {
+                            // Продолжаем чтение, чтобы узнать точное количество строк
+                            while (rs.next()) {
+                                rowCount++;
+                            }
+                            log.warn("Query result truncated for hash: {} rows total, using first {} rows",
+                                    rowCount, MAX_ROWS_FOR_HASH);
                         }
 
                         q.setRowCount(rowCount);
                         q.setExpectedResult(resultBuilder.toString().trim());
 
-                        // Генерируем SHA-256 хеш от результата
+                        // Генерируем SHA-256 хеш от результата (усечённый до 16 символов)
                         if (rowCount > 0) {
-                            q.setExpectedHash(calculateSha256(hashBuilder.toString().trim()));
+                            String fullHash = calculateSha256(hashBuilder.toString().trim());
+                            q.setExpectedHash(fullHash.substring(0, Math.min(16, fullHash.length())));
                         } else {
-                            q.setExpectedHash(calculateSha256("EMPTY_RESULT"));
+                            q.setExpectedHash(calculateSha256("EMPTY_RESULT").substring(0, 16));
                         }
 
                         log.debug("Query returned {} rows, hash: {}", rowCount, q.getExpectedHash());
@@ -138,13 +193,13 @@ public class MoodleGenerator {
                     int affectedRows = stmt.executeUpdate(q.getQuery());
                     q.setRowCount(affectedRows);
                     q.setExpectedResult("Затронуто строк: " + affectedRows);
-                    q.setExpectedHash(calculateSha256("UPDATE:" + affectedRows));
+                    q.setExpectedHash(calculateSha256("UPDATE:" + affectedRows).substring(0, 16));
                 }
 
             } catch (SQLException e) {
                 log.error("Failed to execute query for question: {}", q.getText(), e);
                 q.setExpectedResult("ERROR: " + e.getMessage());
-                q.setExpectedHash(calculateSha256("ERROR:" + e.getMessage()));
+                q.setExpectedHash(calculateSha256("ERROR:" + e.getMessage()).substring(0, 16));
             }
         }
 
@@ -153,6 +208,9 @@ public class MoodleGenerator {
 
     /**
      * Вычисляет SHA-256 хеш строки.
+     *
+     * @param input входная строка
+     * @return хеш в шестнадцатеричном формате (64 символа)
      */
     private static String calculateSha256(String input) {
         try {
@@ -173,29 +231,55 @@ public class MoodleGenerator {
 
     /**
      * Генерирует GIFT формат с хешами в качестве правильных ответов.
+     *
+     * Формат GIFT (General Import Format Technology):
+     * - $CATEGORY: задаёт категорию вопросов в Moodle
+     * - ::название вопроса:: — заголовок
+     * - [code lang="sql"] — блок кода с SQL запросом
+     * - { =правильный_ответ } — блок ответов
+     * - ~# — разделитель для комментария
+     *
+     * Для SELECT-запросов правильным ответом является SHA-256 хеш результата (16 символов).
+     * Преподаватель должен объяснить студентам, что нужно копировать хеш из SQL Trainer.
+     *
+     * @param questions список вопросов
+     * @param categoryName название категории в Moodle
+     * @return строка в формате GIFT
      */
     public static String generateGiftFormat(List<Question> questions, String categoryName) {
         StringBuilder gift = new StringBuilder();
 
-        // Категория
+        // Категория для импорта в Moodle
         gift.append("$CATEGORY: $course$/top/").append(escapeGift(categoryName)).append("\n\n");
 
         for (int i = 0; i < questions.size(); i++) {
             Question q = questions.get(i);
+            String questionTitle = "Вопрос " + (i + 1) + ": " + q.getText();
 
-            gift.append("::").append(escapeGift("Вопрос " + (i + 1) + ": " + q.getText())).append("::\n");
+            gift.append("::").append(escapeGift(questionTitle)).append("::\n");
             gift.append("[code lang=\"sql\"]\n");
             gift.append(q.getQuery()).append("\n");
             gift.append("[/code]\n");
             gift.append("{\n");
 
             if (q.isSelect() && q.getRowCount() > 0) {
-                // Для SELECT запросов используем хеш
+                // Для SELECT запросов правильный ответ — ХЕШ результата (16 символов)
+                // Студент должен скопировать хеш из интерфейса SQL Trainer
                 gift.append("  =").append(q.getExpectedHash()).append("\n");
                 gift.append("  ~#\n");
-                gift.append("  Комментарий для преподавателя:\n");
-                gift.append("  Запрос вернул ").append(q.getRowCount()).append(" строк.\n");
-                gift.append("  Полный результат можно посмотреть в CSV файле.\n");
+                gift.append("  Комментарий для проверяющего:\n");
+                gift.append("  ----------------------------------------\n");
+                gift.append("  Ожидаемый хеш результата: ").append(q.getExpectedHash()).append("\n");
+                gift.append("  Количество строк в результате: ").append(q.getRowCount()).append("\n");
+                gift.append("  \n");
+                gift.append("  КАК ПРОВЕРЯТЬ ОТВЕТ СТУДЕНТА:\n");
+                gift.append("  1. Студент выполняет запрос в SQL Trainer\n");
+                gift.append("  2. SQL Trainer показывает хеш результата (16 символов)\n");
+                gift.append("  3. Студент копирует этот хеш в Moodle\n");
+                gift.append("  4. Moodle сравнивает хеш студента с эталонным\n");
+                gift.append("  5. Если хеши не совпадают, экспортируйте результат студента в CSV\n");
+                gift.append("     и сравните с ожидаемым результатом (см. CSV-файл)\n");
+                gift.append("  ----------------------------------------\n");
             } else {
                 // Для не-SELECT запросов используем текстовый ответ
                 gift.append("  =").append(escapeGift(q.getExpectedResult())).append("\n");
@@ -209,6 +293,14 @@ public class MoodleGenerator {
 
     /**
      * Генерирует Moodle XML формат.
+     *
+     * Формат XML для плагина CodeRunner (требует установки в Moodle).
+     * Позволяет выполнять SQL-запросы непосредственно в Moodle.
+     *
+     * @param questions список вопросов
+     * @param dbName имя базы данных (для информации)
+     * @param categoryName название категории
+     * @return строка в формате Moodle XML
      */
     public static String generateMoodleXml(List<Question> questions, String dbName, String categoryName) {
         StringBuilder xml = new StringBuilder();
@@ -261,7 +353,11 @@ public class MoodleGenerator {
     }
 
     /**
-     * Генерирует текстовый формат для просмотра.
+     * Генерирует текстовый формат для предварительного просмотра.
+     * Показывает первые 20 строк результата и хеш.
+     *
+     * @param questions список вопросов
+     * @return строка в текстовом формате
      */
     public static String generateTextFormat(List<Question> questions) {
         StringBuilder text = new StringBuilder();
@@ -278,7 +374,7 @@ public class MoodleGenerator {
 
             if (q.isSelect()) {
                 text.append("Количество строк: ").append(q.getRowCount()).append("\n");
-                text.append("SHA-256 хеш результата: ").append(q.getExpectedHash()).append("\n");
+                text.append("SHA-256 хеш результата (16 символов): ").append(q.getExpectedHash()).append("\n");
                 text.append("----------------------------------------\n");
                 text.append("Первые 20 строк результата:\n");
                 String[] lines = q.getExpectedResult().split("\n");
@@ -288,6 +384,11 @@ public class MoodleGenerator {
                 if (lines.length > 20) {
                     text.append("  ... и ещё ").append(lines.length - 20).append(" строк\n");
                 }
+                text.append("\n");
+                text.append("Для проверки ответа студента:\n");
+                text.append("1. Выполните запрос студента в SQL Trainer\n");
+                text.append("2. Сравните полученный хеш с ").append(q.getExpectedHash()).append("\n");
+                text.append("3. При несовпадении экспортируйте результат в CSV\n");
             } else {
                 text.append("Результат: ").append(q.getExpectedResult()).append("\n");
             }
@@ -298,6 +399,12 @@ public class MoodleGenerator {
         return text.toString();
     }
 
+    /**
+     * Экранирует специальные символы для XML.
+     *
+     * @param text текст для экранирования
+     * @return экранированный текст
+     */
     private static String escapeXml(String text) {
         if (text == null) return "";
         return text.replace("&", "&amp;")
@@ -307,6 +414,13 @@ public class MoodleGenerator {
                 .replace("'", "&apos;");
     }
 
+    /**
+     * Экранирует специальные символы для GIFT формата.
+     * Символы : = { } [ ] должны быть экранированы обратным слешем.
+     *
+     * @param text текст для экранирования
+     * @return экранированный текст
+     */
     private static String escapeGift(String text) {
         if (text == null) return "";
         return text.replace(":", "\\:")

@@ -18,6 +18,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * Использует HikariCP для пулинга соединений.
  * Поддерживает три роли: ADMIN, TEACHER, STUDENT.
  * Для каждой учебной базы создаётся отдельный пул соединений.
+ *
+ * Максимальное количество учебных баз данных ограничено (MAX_DATABASES)
+ * для предотвращения OutOfMemoryError при создании сотен пулов.
  */
 public class DatabaseConfig {
     private static final Logger log = LoggerFactory.getLogger(DatabaseConfig.class);
@@ -25,6 +28,17 @@ public class DatabaseConfig {
     private static final HikariDataSource adminDataSource;
     private static final Map<String, HikariDataSource> studentDataSources = new ConcurrentHashMap<>();
     private static final Map<String, HikariDataSource> teacherDataSources = new ConcurrentHashMap<>();
+
+    // ===== ЛИМИТЫ ДЛЯ ЗАЩИТЫ ОТ ПЕРЕГРУЗКИ =====
+
+    /** Максимальное количество учебных баз данных (предотвращает создание тысяч пулов) */
+    private static final int MAX_DATABASES = 50;
+
+    /** Максимальное количество пулов студентов (не может превышать MAX_DATABASES) */
+    private static final int MAX_STUDENT_POOLS = MAX_DATABASES;
+
+    /** Максимальное количество пулов преподавателей (не может превышать MAX_DATABASES) */
+    private static final int MAX_TEACHER_POOLS = MAX_DATABASES;
 
     // Параметры подключения из переменных окружения
     private static final String DB_HOST = System.getenv().getOrDefault("DB_HOST", "localhost");
@@ -65,6 +79,7 @@ public class DatabaseConfig {
 
         adminDataSource = new HikariDataSource(adminConfig);
         log.info("DatabaseConfig initialized with PostgreSQL at {}:{}", DB_HOST, DB_PORT);
+        log.info("Max databases limit: {}", MAX_DATABASES);
     }
 
     /**
@@ -103,9 +118,23 @@ public class DatabaseConfig {
     /**
      * Создаёт или возвращает существующий пул соединений для преподавателя.
      * Пул создаётся для каждой базы данных отдельно.
+     *
+     * @throws RuntimeException если превышен лимит количества учебных баз данных
      */
     private static HikariDataSource getTeacherDataSource(String dbName) {
+        // Проверка лимита перед созданием нового пула
+        if (!teacherDataSources.containsKey(dbName) && teacherDataSources.size() >= MAX_TEACHER_POOLS) {
+            String error = String.format(
+                    "Превышен лимит количества учебных баз данных (%d). Невозможно создать пул для '%s'",
+                    MAX_TEACHER_POOLS, dbName);
+            log.error(error);
+            throw new RuntimeException(error);
+        }
+
         return teacherDataSources.computeIfAbsent(dbName, name -> {
+            log.info("Creating teacher pool for database: {} (current pools: {}/{})",
+                    name, teacherDataSources.size() + 1, MAX_TEACHER_POOLS);
+
             HikariConfig config = new HikariConfig();
             config.setJdbcUrl(String.format(
                     "jdbc:postgresql://%s:%s/%s?useUnicode=true&characterEncoding=UTF-8&characterSetResults=UTF-8",
@@ -129,9 +158,23 @@ public class DatabaseConfig {
     /**
      * Создаёт или возвращает существующий пул соединений для студентов.
      * Соединения открываются в режиме только для чтения.
+     *
+     * @throws RuntimeException если превышен лимит количества учебных баз данных
      */
     private static HikariDataSource getStudentDataSource(String dbName) {
+        // Проверка лимита перед созданием нового пула
+        if (!studentDataSources.containsKey(dbName) && studentDataSources.size() >= MAX_STUDENT_POOLS) {
+            String error = String.format(
+                    "Превышен лимит количества учебных баз данных (%d). Невозможно создать пул для '%s'",
+                    MAX_STUDENT_POOLS, dbName);
+            log.error(error);
+            throw new RuntimeException(error);
+        }
+
         return studentDataSources.computeIfAbsent(dbName, name -> {
+            log.info("Creating student pool for database: {} (current pools: {}/{})",
+                    name, studentDataSources.size() + 1, MAX_STUDENT_POOLS);
+
             HikariConfig config = new HikariConfig();
             config.setJdbcUrl(String.format(
                     "jdbc:postgresql://%s:%s/%s?useUnicode=true&characterEncoding=UTF-8&characterSetResults=UTF-8",
@@ -245,5 +288,26 @@ public class DatabaseConfig {
             log.warn("Failed to get max_rows for database {}, using default 20", dbName, e);
         }
         return 20;
+    }
+
+    /**
+     * Возвращает текущее количество активных пулов студентов.
+     */
+    public static int getActiveStudentPoolsCount() {
+        return studentDataSources.size();
+    }
+
+    /**
+     * Возвращает текущее количество активных пулов преподавателей.
+     */
+    public static int getActiveTeacherPoolsCount() {
+        return teacherDataSources.size();
+    }
+
+    /**
+     * Возвращает максимально допустимое количество учебных баз данных.
+     */
+    public static int getMaxDatabasesLimit() {
+        return MAX_DATABASES;
     }
 }

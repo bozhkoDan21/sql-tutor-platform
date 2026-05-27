@@ -15,9 +15,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * Фильтр для ограничения частоты запросов (rate limiting).
  *
  * Правила:
- * - Неавторизованные студенты: 1 запрос в секунду на IP (только для API)
+ * - Неавторизованные студенты: 1 запрос в секунду на сессию
  * - Преподаватели: без ограничений
  * - Статические ресурсы и информационные API: без ограничений
+ *
+ * В отличие от ограничения по IP, ограничение по сессии корректно работает
+ * в условиях NAT (компьютерный класс), так как у каждого студента своя сессия.
  */
 public class RateLimitFilter implements Filter {
 
@@ -25,7 +28,9 @@ public class RateLimitFilter implements Filter {
 
     private static final int MAX_REQUESTS_PER_SECOND = 1;
     private static final long WINDOW_MS = 1000;
-    private static final Map<String, RequestData> requestData = new ConcurrentHashMap<>();
+
+    // Хранилище данных о запросах по ID сессии (не по IP)
+    private static final Map<String, RequestData> sessionRequestData = new ConcurrentHashMap<>();
 
     // API, которые НЕ ограничиваем (информационные, не влияют на нагрузку)
     private static final String[] UNLIMITED_API_PATHS = {
@@ -43,13 +48,25 @@ public class RateLimitFilter implements Filter {
 
     @Override
     public void init(FilterConfig filterConfig) {
+        // Запускаем фоновый поток для очистки устаревших записей
         Thread cleanupThread = new Thread(() -> {
             while (true) {
                 try {
-                    Thread.sleep(60_000);
+                    Thread.sleep(60_000); // Раз в минуту
                     long now = System.currentTimeMillis();
-                    requestData.entrySet().removeIf(entry ->
-                            now - entry.getValue().lastRequestTime > WINDOW_MS * 2);
+                    int removed = 0;
+
+                    // Удаляем записи, которые не использовались дольше 2 минут
+                    for (Map.Entry<String, RequestData> entry : sessionRequestData.entrySet()) {
+                        if (now - entry.getValue().getLastRequestTime() > WINDOW_MS * 120) {
+                            sessionRequestData.remove(entry.getKey());
+                            removed++;
+                        }
+                    }
+
+                    if (removed > 0) {
+                        log.debug("RateLimitFilter cleanup: removed {} expired session records", removed);
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
@@ -58,7 +75,8 @@ public class RateLimitFilter implements Filter {
         });
         cleanupThread.setDaemon(true);
         cleanupThread.start();
-        log.info("RateLimitFilter initialized");
+
+        log.info("RateLimitFilter initialized (rate limiting by session ID, max {} req/sec)", MAX_REQUESTS_PER_SECOND);
     }
 
     @Override
@@ -101,10 +119,14 @@ public class RateLimitFilter implements Filter {
             return;
         }
 
-        String clientIp = getClientIp(req);
+        // 6. Получаем или создаём сессию для студента
+        //    Важно: используем ту же сессию, что и для аутентификации (если есть)
+        session = req.getSession(true); // создаём сессию, если её нет
+        String sessionId = session.getId();
 
-        if (isRateLimited(clientIp)) {
-            log.warn("Rate limit exceeded for IP: {} on path: {}", clientIp, path);
+        if (isRateLimited(sessionId)) {
+            log.warn("Rate limit exceeded for session: {} (user from IP: {}), path: {}",
+                    sessionId, getClientIp(req), path);
             resp.setStatus(429);
             resp.setContentType("application/json");
             resp.setCharacterEncoding("UTF-8");
@@ -115,31 +137,46 @@ public class RateLimitFilter implements Filter {
         chain.doFilter(request, response);
     }
 
-    private boolean isRateLimited(String ip) {
+    /**
+     * Проверяет, не превышен ли лимит запросов для данной сессии.
+     *
+     * @param sessionId идентификатор сессии
+     * @return true если лимит превышен
+     */
+    private boolean isRateLimited(String sessionId) {
         long now = System.currentTimeMillis();
-        RequestData data = requestData.get(ip);
+        RequestData data = sessionRequestData.get(sessionId);
 
         if (data == null) {
-            requestData.put(ip, new RequestData(now, 1));
+            // Первый запрос от сессии
+            sessionRequestData.put(sessionId, new RequestData(now, 1));
             return false;
         }
 
         synchronized (data) {
-            if (now - data.lastRequestTime < WINDOW_MS) {
-                if (data.requestCount >= MAX_REQUESTS_PER_SECOND) {
-                    return true;
+            if (now - data.getLastRequestTime() < WINDOW_MS) {
+                // В пределах текущего окна
+                if (data.getRequestCount() >= MAX_REQUESTS_PER_SECOND) {
+                    return true; // Превышен лимит
                 }
-                data.requestCount++;
-                data.lastRequestTime = now;
+                data.setRequestCount(data.getRequestCount() + 1);
+                data.setLastRequestTime(now);
                 return false;
             } else {
-                data.requestCount = 1;
-                data.lastRequestTime = now;
+                // Новое окно (прошла секунда)
+                data.setRequestCount(1);
+                data.setLastRequestTime(now);
                 return false;
             }
         }
     }
 
+    /**
+     * Проверяет, исключён ли путь из rate limiting.
+     *
+     * @param path путь запроса
+     * @return true если путь исключён
+     */
     private boolean isExcludedPath(String path) {
         for (String excluded : EXCLUDED_PATHS) {
             if (path.equals(excluded) || path.startsWith(excluded)) {
@@ -149,6 +186,12 @@ public class RateLimitFilter implements Filter {
         return false;
     }
 
+    /**
+     * Проверяет, относится ли путь к неограничиваемым API.
+     *
+     * @param path путь запроса
+     * @return true если API не требует ограничения
+     */
     private boolean isUnlimitedApi(String path) {
         for (String api : UNLIMITED_API_PATHS) {
             if (path.startsWith(api)) {
@@ -158,6 +201,13 @@ public class RateLimitFilter implements Filter {
         return false;
     }
 
+    /**
+     * Получает реальный IP-адрес клиента (для логирования).
+     * Учитывает заголовки X-Forwarded-For, Proxy-Client-IP и т.д.
+     *
+     * @param request HTTP-запрос
+     * @return IP-адрес клиента
+     */
     private String getClientIp(HttpServletRequest request) {
         String ip = request.getHeader("X-Forwarded-For");
         if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
@@ -178,17 +228,27 @@ public class RateLimitFilter implements Filter {
         return ip;
     }
 
+    /**
+     * Класс для хранения данных о запросах от сессии.
+     */
     private static class RequestData {
-        long lastRequestTime;
-        int requestCount;
+        private volatile long lastRequestTime;
+        private volatile int requestCount;
+
         RequestData(long lastRequestTime, int requestCount) {
             this.lastRequestTime = lastRequestTime;
             this.requestCount = requestCount;
         }
+
+        public long getLastRequestTime() { return lastRequestTime; }
+        public void setLastRequestTime(long lastRequestTime) { this.lastRequestTime = lastRequestTime; }
+        public int getRequestCount() { return requestCount; }
+        public void setRequestCount(int requestCount) { this.requestCount = requestCount; }
     }
 
     @Override
     public void destroy() {
+        sessionRequestData.clear();
         log.info("RateLimitFilter destroyed");
     }
 }
