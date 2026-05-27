@@ -184,7 +184,11 @@ public class QueryExecutor {
             return errorResult("Запрос содержит запрещённые команды (DELETE, UPDATE, DROP и т.д.)");
         }
 
-        String cacheKey = dbName + ":" + sql + ":explain=" + needExplain;
+        // ПОЛУЧАЕМ maxRows ОДИН РАЗ
+        int maxRows = DatabaseConfig.getMaxRowsForDatabase(dbName);
+
+        // Ключ кэша ТЕПЕРЬ ВКЛЮЧАЕТ maxRows
+        String cacheKey = dbName + ":" + sql + ":explain=" + needExplain + ":maxRows=" + maxRows;
         QueryResult cached = cache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.getExecutionTimeMs()) < CACHE_TTL_MS) {
             log.debug("Returning cached result for: {}", cacheKey);
@@ -200,8 +204,7 @@ public class QueryExecutor {
             // Устанавливаем таймаут выполнения запроса (из переменных окружения)
             stmt.setQueryTimeout(DatabaseConfig.getQueryTimeout());
 
-            // Получаем лимит строк для этой базы из метаданных (по умолчанию 20)
-            int maxRows = DatabaseConfig.getMaxRowsForDatabase(dbName);
+            // Устанавливаем лимит строк (maxRows УЖЕ получен выше)
             stmt.setMaxRows(maxRows);
             log.debug("Setting max_rows={} for database {}", maxRows, dbName);
 

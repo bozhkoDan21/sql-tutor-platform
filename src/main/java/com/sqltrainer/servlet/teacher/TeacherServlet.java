@@ -30,7 +30,8 @@ import java.util.regex.Pattern;
  * - Создание новых БД из SQL-скриптов
  * - Загрузка схемы БД (изображение)
  * - Удаление существующих БД
- * - Управление папками (категориями)
+ * - Управление папками (категориями): создание, редактирование, удаление
+ * - Перемещение баз данных между папками
  * - Управление метаданными БД (видимость, пароль, период доступа, лимит строк)
  * - Генерация вопросов для Moodle
  */
@@ -72,7 +73,7 @@ public class TeacherServlet extends HttpServlet {
                     String folderId = req.getParameter("folderId");
                     String displayName = req.getParameter("displayName");
                     String accessPassword = req.getParameter("accessPassword");
-                    String maxRows = req.getParameter("maxRows");  // лимит строк для студентов
+                    String maxRows = req.getParameter("maxRows");
                     Part filePart = req.getPart("sqlFile");
                     handleUpload(conn, dbName, folderId, displayName, accessPassword, maxRows, filePart, response);
                     break;
@@ -85,8 +86,13 @@ public class TeacherServlet extends HttpServlet {
                     break;
 
                 case "list":
-                    // Получение списка всех БД для преподавателя
+                    // Получение списка ВСЕХ БД для преподавателя (включая проблемные)
                     response.put("databases", getDatabaseList(conn));
+                    break;
+
+                case "listNormalDatabases":
+                    // Получение списка только НОРМАЛЬНЫХ БД (с существующей папкой)
+                    response.put("databases", getNormalDatabaseList(conn));
                     break;
 
                 case "delete":
@@ -98,12 +104,34 @@ public class TeacherServlet extends HttpServlet {
                 // ========== УПРАВЛЕНИЕ ПАПКАМИ ==========
 
                 case "createFolder":
+                    // Создание новой папки
                     String folderName = req.getParameter("folderName");
                     handleCreateFolder(conn, folderName, response);
                     break;
 
                 case "listFolders":
+                    // Получение списка всех папок
                     response.put("folders", getFoldersList(conn));
+                    break;
+
+                case "updateFolder":
+                    // Изменение названия папки
+                    String folderIdToUpdate = req.getParameter("folderId");
+                    String newFolderName = req.getParameter("folderName");
+                    handleUpdateFolder(conn, folderIdToUpdate, newFolderName, response);
+                    break;
+
+                case "deleteFolder":
+                    // Удаление папки (только если в ней нет баз данных)
+                    String folderIdToDelete = req.getParameter("folderId");
+                    handleDeleteFolder(conn, folderIdToDelete, response);
+                    break;
+
+                case "moveDatabaseToFolder":
+                    // Перемещение базы данных в другую папку
+                    String dbNameToMove = req.getParameter("dbName");
+                    String targetFolderId = req.getParameter("targetFolderId");
+                    handleMoveDatabaseToFolder(conn, dbNameToMove, targetFolderId, response);
                     break;
 
                 // ========== РЕДАКТИРОВАНИЕ МЕТАДАННЫХ ==========
@@ -117,7 +145,7 @@ public class TeacherServlet extends HttpServlet {
                     String isVisible = req.getParameter("isVisible");
                     String accessStart = req.getParameter("accessStart");
                     String accessEnd = req.getParameter("accessEnd");
-                    String updateMaxRows = req.getParameter("maxRows");  // лимит строк для студентов
+                    String updateMaxRows = req.getParameter("maxRows");
                     handleUpdateDatabaseMetadata(conn, updateDbName, updateDisplayName, updateFolderId,
                             updateAccessPassword, isVisible, accessStart, accessEnd, removePassword, updateMaxRows, response);
                     break;
@@ -199,6 +227,186 @@ public class TeacherServlet extends HttpServlet {
         return folders;
     }
 
+    /**
+     * Обновляет название папки.
+     * Проверяет, что новое имя не конфликтует с существующими папками.
+     *
+     * @param conn          соединение с БД
+     * @param folderIdStr   идентификатор папки
+     * @param newName       новое название папки
+     * @param response      объект для формирования ответа
+     */
+    private void handleUpdateFolder(Connection conn, String folderIdStr, String newName, Map<String, Object> response) {
+        if (folderIdStr == null || folderIdStr.isEmpty()) {
+            response.put("error", "Не указан ID папки");
+            return;
+        }
+
+        if (newName == null || newName.trim().isEmpty()) {
+            response.put("error", "Название папки не может быть пустым");
+            return;
+        }
+
+        try {
+            long folderId = Long.parseLong(folderIdStr);
+
+            // Проверяем, существует ли папка с таким именем (исключая текущую)
+            try (PreparedStatement checkStmt = conn.prepareStatement(
+                    "SELECT id FROM database_folders WHERE name = ? AND id != ?")) {
+                checkStmt.setString(1, newName.trim());
+                checkStmt.setLong(2, folderId);
+                ResultSet rs = checkStmt.executeQuery();
+                if (rs.next()) {
+                    response.put("error", "Папка с таким именем уже существует");
+                    return;
+                }
+            }
+
+            // Обновляем название папки
+            try (PreparedStatement stmt = conn.prepareStatement(
+                    "UPDATE database_folders SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")) {
+                stmt.setString(1, newName.trim());
+                stmt.setLong(2, folderId);
+                int updated = stmt.executeUpdate();
+
+                if (updated > 0) {
+                    response.put("success", true);
+                    response.put("message", "Название папки обновлено");
+                    QueryExecutor.clearCache();
+                    log.info("Folder renamed: id={}, newName={}", folderId, newName);
+                } else {
+                    response.put("error", "Папка не найдена");
+                }
+            }
+        } catch (NumberFormatException e) {
+            response.put("error", "Неверный формат ID папки");
+        } catch (SQLException e) {
+            log.error("Failed to update folder: {}", e.getMessage());
+            response.put("error", "Ошибка обновления папки: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Удаляет папку. Удаление возможно только если в папке нет баз данных.
+     * Если в папке есть базы данных, операция отклоняется с соответствующим сообщением.
+     *
+     * @param conn            соединение с БД
+     * @param folderIdStr     идентификатор папки
+     * @param response        объект для формирования ответа
+     */
+    private void handleDeleteFolder(Connection conn, String folderIdStr, Map<String, Object> response) {
+        if (folderIdStr == null || folderIdStr.isEmpty()) {
+            response.put("error", "Не указан ID папки");
+            return;
+        }
+
+        try {
+            long folderId = Long.parseLong(folderIdStr);
+
+            // Проверяем, есть ли базы данных в этой папке
+            try (PreparedStatement checkStmt = conn.prepareStatement(
+                    "SELECT COUNT(*) FROM databases_metadata WHERE folder_id = ?")) {
+                checkStmt.setLong(1, folderId);
+                ResultSet rs = checkStmt.executeQuery();
+                if (rs.next() && rs.getInt(1) > 0) {
+                    int dbCount = rs.getInt(1);
+                    response.put("error", "Невозможно удалить папку: в ней находится " + dbCount +
+                            " баз(ы) данных. Сначала переместите или удалите их.");
+                    return;
+                }
+            }
+
+            // Удаляем папку
+            try (PreparedStatement stmt = conn.prepareStatement(
+                    "DELETE FROM database_folders WHERE id = ?")) {
+                stmt.setLong(1, folderId);
+                int deleted = stmt.executeUpdate();
+
+                if (deleted > 0) {
+                    response.put("success", true);
+                    response.put("message", "Папка удалена");
+                    QueryExecutor.clearCache();
+                    log.info("Folder deleted: id={}", folderId);
+                } else {
+                    response.put("error", "Папка не найдена");
+                }
+            }
+        } catch (NumberFormatException e) {
+            response.put("error", "Неверный формат ID папки");
+        } catch (SQLException e) {
+            log.error("Failed to delete folder: {}", e.getMessage());
+            response.put("error", "Ошибка удаления папки: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Перемещает базу данных в другую папку.
+     * Проверяет существование целевой папки и базы данных перед перемещением.
+     *
+     * @param conn                соединение с БД
+     * @param dbName              имя базы данных
+     * @param targetFolderIdStr   идентификатор целевой папки
+     * @param response            объект для формирования ответа
+     */
+    private void handleMoveDatabaseToFolder(Connection conn, String dbName, String targetFolderIdStr,
+                                            Map<String, Object> response) {
+        if (dbName == null || dbName.isEmpty()) {
+            response.put("error", "Не указано имя базы данных");
+            return;
+        }
+
+        if (targetFolderIdStr == null || targetFolderIdStr.isEmpty()) {
+            response.put("error", "Не указана целевая папка");
+            return;
+        }
+
+        try {
+            long targetFolderId = Long.parseLong(targetFolderIdStr);
+
+            // Проверяем, существует ли целевая папка
+            try (PreparedStatement checkFolderStmt = conn.prepareStatement(
+                    "SELECT id FROM database_folders WHERE id = ?")) {
+                checkFolderStmt.setLong(1, targetFolderId);
+                if (!checkFolderStmt.executeQuery().next()) {
+                    response.put("error", "Целевая папка не существует");
+                    return;
+                }
+            }
+
+            // Проверяем, существует ли база данных
+            try (PreparedStatement checkDbStmt = conn.prepareStatement(
+                    "SELECT db_name FROM databases_metadata WHERE db_name = ?")) {
+                checkDbStmt.setString(1, dbName);
+                if (!checkDbStmt.executeQuery().next()) {
+                    response.put("error", "База данных не найдена");
+                    return;
+                }
+            }
+
+            // Перемещаем базу в другую папку
+            try (PreparedStatement stmt = conn.prepareStatement(
+                    "UPDATE databases_metadata SET folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE db_name = ?")) {
+                stmt.setLong(1, targetFolderId);
+                stmt.setString(2, dbName);
+                int updated = stmt.executeUpdate();
+
+                if (updated > 0) {
+                    response.put("success", true);
+                    response.put("message", "База данных перемещена в папку");
+                    QueryExecutor.clearCache();
+                    log.info("Database moved: dbName={}, newFolderId={}", dbName, targetFolderId);
+                } else {
+                    response.put("error", "Не удалось переместить базу данных");
+                }
+            }
+        } catch (NumberFormatException e) {
+            response.put("error", "Неверный формат ID папки");
+        } catch (SQLException e) {
+            log.error("Failed to move database: {}", e.getMessage());
+            response.put("error", "Ошибка перемещения базы данных: " + e.getMessage());
+        }
+    }
+
     // ============================================
     // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ (экранирование, валидация)
     // ============================================
@@ -271,10 +479,13 @@ public class TeacherServlet extends HttpServlet {
                 params.add(displayName);
             }
 
-            // Обновление папки
+            // Обновление папки (обязательно)
             if (folderId != null && !folderId.isEmpty()) {
                 sql.append("folder_id = ?, ");
                 params.add(Long.parseLong(folderId));
+            } else {
+                response.put("error", "Папка обязательна для выбора");
+                return;
             }
 
             // Обновление пароля: удаление существующего или установка нового
@@ -327,7 +538,7 @@ public class TeacherServlet extends HttpServlet {
                 if (updated > 0) {
                     response.put("success", true);
                     response.put("message", "Метаданные базы данных обновлены");
-                    QueryExecutor.clearCache();  // Очищаем кэш запросов
+                    QueryExecutor.clearCache();
                 } else {
                     response.put("error", "База данных не найдена");
                 }
@@ -460,7 +671,7 @@ public class TeacherServlet extends HttpServlet {
      *
      * @param conn           соединение с БД
      * @param dbName         имя новой базы данных
-     * @param folderId       идентификатор папки
+     * @param folderId       идентификатор папки (обязательный)
      * @param displayName    отображаемое имя
      * @param accessPassword пароль доступа
      * @param maxRows        максимальное количество строк для студентов (по умолчанию 20)
@@ -528,19 +739,25 @@ public class TeacherServlet extends HttpServlet {
             return;
         }
 
-        // Проверка существования выбранной папки
-        if (folderId != null && !folderId.isEmpty()) {
-            try {
-                long folderIdLong = Long.parseLong(folderId);
-                try (PreparedStatement checkStmt = conn.prepareStatement("SELECT id FROM database_folders WHERE id = ?")) {
-                    checkStmt.setLong(1, folderIdLong);
-                    if (!checkStmt.executeQuery().next()) {
-                        response.put("error", "Выбранная папка не существует");
-                        return;
-                    }
-                }
-            } catch (NumberFormatException e) {
-                response.put("error", "Неверный формат идентификатора папки");
+        // ===== ПРОВЕРКА ПАПКИ (ОБЯЗАТЕЛЬНАЯ) =====
+        if (folderId == null || folderId.isEmpty()) {
+            response.put("error", "Не выбрана папка для базы данных");
+            return;
+        }
+
+        long folderIdLong;
+        try {
+            folderIdLong = Long.parseLong(folderId);
+        } catch (NumberFormatException e) {
+            response.put("error", "Неверный формат идентификатора папки");
+            return;
+        }
+
+        // Проверяем существование выбранной папки
+        try (PreparedStatement checkStmt = conn.prepareStatement("SELECT id FROM database_folders WHERE id = ?")) {
+            checkStmt.setLong(1, folderIdLong);
+            if (!checkStmt.executeQuery().next()) {
+                response.put("error", "Выбранная папка не существует");
                 return;
             }
         }
@@ -591,39 +808,48 @@ public class TeacherServlet extends HttpServlet {
 
         // ===== СОХРАНЕНИЕ МЕТАДАННЫХ =====
 
-        if (folderId != null && !folderId.isEmpty()) {
-            // Хешируем пароль, если он указан
-            String passwordHash = null;
-            if (accessPassword != null && !accessPassword.isEmpty()) {
-                passwordHash = BCrypt.hashpw(accessPassword, BCrypt.gensalt());
+        // Хешируем пароль, если он указан
+        String passwordHash = null;
+        if (accessPassword != null && !accessPassword.isEmpty()) {
+            passwordHash = BCrypt.hashpw(accessPassword, BCrypt.gensalt());
+        }
+
+        String displayNameValue = displayName != null && !displayName.isEmpty() ? displayName : dbName;
+
+        // Устанавливаем лимит строк (по умолчанию 20)
+        int maxRowsValue = 20;
+        if (maxRows != null && !maxRows.isEmpty()) {
+            try {
+                maxRowsValue = Integer.parseInt(maxRows);
+                if (maxRowsValue < 1) maxRowsValue = 20;
+            } catch (NumberFormatException e) {
+                maxRowsValue = 20;
             }
+        }
 
-            String displayNameValue = displayName != null && !displayName.isEmpty() ? displayName : dbName;
+        String metadataSql = "INSERT INTO databases_metadata (db_name, folder_id, display_name, access_password_hash, max_rows, created_by) " +
+                "VALUES (?, ?, ?, ?, ?, 'teacher')";
 
-            // Устанавливаем лимит строк (по умолчанию 20)
-            int maxRowsValue = 20;
-            if (maxRows != null && !maxRows.isEmpty()) {
-                try {
-                    maxRowsValue = Integer.parseInt(maxRows);
-                    if (maxRowsValue < 1) maxRowsValue = 20;
-                } catch (NumberFormatException e) {
-                    maxRowsValue = 20;
-                }
-            }
+        try (PreparedStatement stmt = conn.prepareStatement(metadataSql)) {
+            stmt.setString(1, dbName);
+            stmt.setLong(2, folderIdLong);  // Обязательно, не NULL
+            stmt.setString(3, displayNameValue);
 
-            String metadataSql = "INSERT INTO databases_metadata (db_name, folder_id, display_name, access_password_hash, max_rows, created_by) " +
-                    "VALUES (?, ?, ?, ?, ?, 'teacher')";
-            try (PreparedStatement stmt = conn.prepareStatement(metadataSql)) {
-                stmt.setString(1, dbName);
-                stmt.setLong(2, Long.parseLong(folderId));
-                stmt.setString(3, displayNameValue);
+            if (passwordHash != null) {
                 stmt.setString(4, passwordHash);
-                stmt.setInt(5, maxRowsValue);
-                stmt.executeUpdate();
-            } catch (SQLException e) {
-                log.warn("Failed to insert database metadata: {}", e.getMessage());
-                response.put("error", "Ошибка сохранения метаданных базы данных: " + e.getMessage());
+            } else {
+                stmt.setNull(4, Types.VARCHAR);
             }
+
+            stmt.setInt(5, maxRowsValue);
+            stmt.executeUpdate();
+
+            log.info("Database metadata saved for: {} (folder: {})", dbName, folderIdLong);
+
+        } catch (SQLException e) {
+            log.warn("Failed to insert database metadata: {}", e.getMessage());
+            response.put("error", "Ошибка сохранения метаданных базы данных: " + e.getMessage());
+            return;
         }
 
         response.put("success", true);
@@ -850,11 +1076,11 @@ public class TeacherServlet extends HttpServlet {
     }
 
     /**
-     * Возвращает список баз данных для отображения преподавателю.
-     * Включает поле max_rows.
+     * Возвращает список ВСЕХ баз данных для отображения преподавателю в разделе "Существующие базы данных".
+     * Использует LEFT JOIN, чтобы показать даже проблемные базы (без папки или с битой папкой).
      *
      * @param conn соединение с БД
-     * @return список баз данных с метаданными
+     * @return список всех баз данных с метаданными
      * @throws SQLException при ошибке выполнения запроса
      */
     private List<Map<String, Object>> getDatabaseList(Connection conn) throws SQLException {
@@ -863,7 +1089,50 @@ public class TeacherServlet extends HttpServlet {
                 "dm.folder_id, dm.is_visible, dm.access_start, dm.access_end, " +
                 "dm.schema_image_url, dm.access_password_hash, dm.max_rows " +
                 "FROM databases_metadata dm " +
-                "JOIN database_folders df ON dm.folder_id = df.id";
+                "LEFT JOIN database_folders df ON dm.folder_id = df.id";
+
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                Map<String, Object> db = new HashMap<>();
+                db.put("dbName", rs.getString("db_name"));
+                db.put("displayName", rs.getString("display_name"));
+                db.put("folderName", rs.getString("folder_name") != null ? rs.getString("folder_name") : "(нет папки)");
+                db.put("folderId", rs.getObject("folder_id") != null ? rs.getLong("folder_id") : null);
+                db.put("isVisible", rs.getBoolean("is_visible"));
+                db.put("accessStart", rs.getDate("access_start"));
+                db.put("accessEnd", rs.getDate("access_end"));
+                db.put("schemaImageUrl", rs.getString("schema_image_url"));
+                db.put("maxRows", rs.getInt("max_rows"));
+
+                String passwordHash = rs.getString("access_password_hash");
+                db.put("hasPassword", passwordHash != null && !passwordHash.isEmpty());
+
+                databases.add(db);
+            }
+        }
+        return databases;
+    }
+
+    /**
+     * Возвращает список ТОЛЬКО НОРМАЛЬНЫХ баз данных для выпадающих списков
+     * (генерация вопросов Moodle, загрузка схемы).
+     * Использует INNER JOIN и проверку folder_id IS NOT NULL.
+     *
+     * @param conn соединение с БД
+     * @return список нормальных баз данных
+     * @throws SQLException при ошибке выполнения запроса
+     */
+    private List<Map<String, Object>> getNormalDatabaseList(Connection conn) throws SQLException {
+        List<Map<String, Object>> databases = new ArrayList<>();
+        // INNER JOIN + явная проверка folder_id IS NOT NULL
+        String sql = "SELECT dm.db_name, dm.display_name, df.name as folder_name, " +
+                "dm.folder_id, dm.is_visible, dm.access_start, dm.access_end, " +
+                "dm.schema_image_url, dm.access_password_hash, dm.max_rows " +
+                "FROM databases_metadata dm " +
+                "INNER JOIN database_folders df ON dm.folder_id = df.id " +
+                "WHERE dm.folder_id IS NOT NULL " +
+                "ORDER BY df.name, dm.display_name";
 
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {

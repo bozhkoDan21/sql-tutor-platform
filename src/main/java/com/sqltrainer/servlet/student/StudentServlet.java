@@ -28,8 +28,6 @@ import static com.sqltrainer.util.Constants.*;
  * Сервлет для выполнения SQL-запросов.
  * Студенты могут выполнять только SELECT запросы с ограничениями.
  * Преподаватели могут выполнять любые SQL команды.
- *
- * Мониторинг сессий студентов УДАЛЁН по требованию.
  */
 @WebServlet("/api/execute")
 public class StudentServlet extends HttpServlet {

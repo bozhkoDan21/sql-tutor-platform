@@ -3,6 +3,15 @@
  * Управление базами данных и папками
  */
 
+// ============================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ============================================
+
+/**
+ * Экранирует HTML-символы для предотвращения XSS-атак
+ * @param {string} text - текст для экранирования
+ * @returns {string} экранированный текст
+ */
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -12,10 +21,10 @@ function escapeHtml(text) {
 
 let csrfToken = null;
 
-// ============================================
-// CSRF-токены
-// ============================================
-
+/**
+ * Загружает CSRF-токен с сервера
+ * @returns {Promise<boolean>} true если токен успешно загружен
+ */
 async function loadCsrfToken() {
     try {
         const response = await fetch('/api/csrf/token');
@@ -33,61 +42,74 @@ async function loadCsrfToken() {
     return false;
 }
 
-window.setCsrfToken = function(token) {
-    csrfToken = token;
-};
-
+/**
+ * Добавляет CSRF-токен к FormData
+ * @param {FormData} formData - объект FormData
+ * @returns {FormData} изменённый FormData
+ */
 function addCsrfToFormData(formData) {
-    if (csrfToken) {
-        formData.append('csrf_token', csrfToken);
-    }
+    if (csrfToken) formData.append('csrf_token', csrfToken);
     return formData;
 }
 
+/**
+ * Добавляет CSRF-токен к URLSearchParams
+ * @param {URLSearchParams} params - объект URLSearchParams
+ * @returns {URLSearchParams} изменённый URLSearchParams
+ */
 function addCsrfToParams(params) {
-    if (csrfToken) {
-        params.append('csrf_token', csrfToken);
-    }
+    if (csrfToken) params.append('csrf_token', csrfToken);
     return params;
 }
 
 // ============================================
-// Аутентификация
+// АУТЕНТИФИКАЦИЯ
 // ============================================
 
+/**
+ * Проверяет аутентификацию преподавателя при загрузке страницы
+ */
 (async function checkAuth() {
     try {
         const response = await fetch('/api/login');
         const data = await response.json();
-        if (!data.authenticated) {
-            window.location.href = '/login';
-        }
+        if (!data.authenticated) window.location.href = '/login';
     } catch (e) {
         window.location.href = '/login';
     }
 })();
 
-document.getElementById('logoutBtn').addEventListener('click', async (e) => {
-    e.preventDefault();
-    await fetch('/api/logout', { method: 'POST' });
-    window.location.href = '/login';
-});
+/**
+ * Обработчик кнопки выхода из системы
+ */
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await fetch('/api/logout', { method: 'POST' });
+        window.location.href = '/login';
+    });
+}
 
 // ============================================
-// Вспомогательные функции для файлов
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ ФАЙЛОВ
 // ============================================
 
+/**
+ * Обновляет метку выбранного SQL файла
+ * @param {HTMLInputElement} input - элемент input file
+ */
 function updateFileLabel(input) {
     const fileNameSpan = document.getElementById('fileName');
     const fileUpload = document.querySelector('#uploadForm .file-upload');
+    if (!fileNameSpan || !fileUpload) return;
+
     if (input.files && input.files.length > 0) {
         const fileName = input.files[0].name;
         const fileSize = (input.files[0].size / 1024).toFixed(0);
-        if (fileSize > 1024) {
-            fileNameSpan.textContent = '📄 ' + fileName + ' (' + (fileSize/1024).toFixed(2) + ' MB)';
-        } else {
-            fileNameSpan.textContent = '📄 ' + fileName + ' (' + fileSize + ' KB)';
-        }
+        fileNameSpan.textContent = fileSize > 1024
+            ? `📄 ${fileName} (${(fileSize/1024).toFixed(2)} MB)`
+            : `📄 ${fileName} (${fileSize} KB)`;
         fileUpload.style.borderColor = 'var(--primary)';
         fileUpload.style.background = 'var(--primary-light)';
     } else {
@@ -97,17 +119,21 @@ function updateFileLabel(input) {
     }
 }
 
+/**
+ * Обновляет метку выбранного файла схемы
+ * @param {HTMLInputElement} input - элемент input file
+ */
 function updateSchemaFileLabel(input) {
     const fileNameSpan = document.getElementById('schemaFileName');
     const fileUpload = document.querySelector('#uploadSchemaForm .file-upload');
+    if (!fileNameSpan || !fileUpload) return;
+
     if (input.files && input.files.length > 0) {
         const fileName = input.files[0].name;
         const fileSize = (input.files[0].size / 1024).toFixed(0);
-        if (fileSize > 1024) {
-            fileNameSpan.textContent = '🖼️ ' + fileName + ' (' + (fileSize/1024).toFixed(2) + ' MB)';
-        } else {
-            fileNameSpan.textContent = '🖼️ ' + fileName + ' (' + fileSize + ' KB)';
-        }
+        fileNameSpan.textContent = fileSize > 1024
+            ? `🖼️ ${fileName} (${(fileSize/1024).toFixed(2)} MB)`
+            : `🖼️ ${fileName} (${fileSize} KB)`;
         fileUpload.style.borderColor = 'var(--primary)';
         fileUpload.style.background = 'var(--primary-light)';
     } else {
@@ -117,25 +143,36 @@ function updateSchemaFileLabel(input) {
     }
 }
 
+/**
+ * Добавляет сообщение в лог-контейнер
+ * @param {string} message - текст сообщения
+ * @param {string} type - тип сообщения (info, success, error, warning)
+ */
 function addLogMessage(message, type) {
     const logMessages = document.getElementById('logMessages');
+    if (!logMessages) return;
+
     const logEntry = document.createElement('div');
     logEntry.className = type || 'info';
-    const time = new Date().toLocaleTimeString();
-    logEntry.textContent = '[' + time + '] ' + message;
+    logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
     logMessages.appendChild(logEntry);
     logMessages.scrollTop = logMessages.scrollHeight;
 }
 
 // ============================================
-// Управление папками
+// УПРАВЛЕНИЕ ПАПКАМИ
 // ============================================
 
+/**
+ * Загружает список папок для выпадающего списка (форма создания БД)
+ */
 async function loadFoldersForSelect() {
     try {
         const response = await fetch('/api/teacher?action=listFolders');
         const data = await response.json();
         const select = document.getElementById('folderSelect');
+        if (!select) return;
+
         select.innerHTML = '<option value="">Выберите папку</option>';
         if (data.folders) {
             for (const folder of data.folders) {
@@ -147,90 +184,190 @@ async function loadFoldersForSelect() {
         }
     } catch (e) {
         console.error('Failed to load folders:', e);
+        const select = document.getElementById('folderSelect');
+        if (select) select.innerHTML = '<option value="">Ошибка загрузки папок</option>';
     }
 }
 
+/**
+ * Рендерит строку базы данных для отображения в списке
+ * @param {Object} db - объект базы данных
+ * @param {boolean} isVisible - видимость базы
+ * @param {boolean} isOrphaned - является ли база "сиротой" (папка не существует)
+ * @param {boolean} noFolder - отсутствует ли папка (folder_id = NULL)
+ * @returns {string} HTML-строка
+ */
+function renderDatabaseRow(db, isVisible, isOrphaned, noFolder) {
+    let warningBadge = '';
+    if (noFolder) warningBadge = '<span class="folder-db-warning">⚠️ без папки</span>';
+    if (isOrphaned) warningBadge = '<span class="folder-db-error">❌ папка не найдена</span>';
+
+    return `
+        <div class="folder-db-item">
+            <div>
+                <span class="folder-db-name">${escapeHtml(db.dbName)}</span>
+                <span class="folder-db-display">(${escapeHtml(db.displayName)})</span>
+                <span class="folder-db-display">📊 лимит: ${db.maxRows || 20} строк</span>
+                ${warningBadge}
+            </div>
+            <div class="db-actions">
+                <button class="btn-move" onclick="moveDatabaseToFolder('${escapeHtml(db.dbName)}', ${db.folderId || 'null'})" title="Переместить в папку">📁</button>
+                <button class="btn-edit" onclick="editDatabase('${escapeHtml(db.dbName)}', '${escapeHtml(db.displayName)}', ${db.folderId || 0}, ${isVisible}, '${escapeHtml(db.accessStart || '')}', '${escapeHtml(db.accessEnd || '')}', ${db.maxRows || 20})">✏️ Редактировать</button>
+                <button class="btn-delete" onclick="deleteDatabase('${escapeHtml(db.dbName)}')">Удалить</button>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Загружает и отображает все папки и базы данных в разделе "Существующие базы данных"
+ */
 async function loadFoldersList() {
+    const container = document.getElementById('foldersList');
+    if (!container) return;
+    container.innerHTML = '<div class="empty-state">⏳ Загрузка папок...</div>';
+
     try {
-        const response = await fetch('/api/teacher?action=list');
-        const data = await response.json();
-        const container = document.getElementById('foldersList');
+        const [foldersRes, dbsRes] = await Promise.all([
+            fetch('/api/teacher?action=listFolders'),
+            fetch('/api/teacher?action=list')
+        ]);
 
-        if (data.databases && data.databases.length > 0) {
-            const foldersMap = new Map();
+        if (!foldersRes.ok || !dbsRes.ok) throw new Error('Ошибка загрузки');
 
-            for (const db of data.databases) {
-                const folderId = db.folderId;
-                const folderName = db.folderName;
+        const foldersData = await foldersRes.json();
+        const dbsData = await dbsRes.json();
 
-                if (!foldersMap.has(folderId)) {
-                    foldersMap.set(folderId, {
-                        id: folderId,
-                        name: folderName,
-                        databases: []
-                    });
-                }
-                foldersMap.get(folderId).databases.push(db);
+        // Карта существующих папок
+        const foldersMap = new Map();
+        if (foldersData.folders) {
+            for (const folder of foldersData.folders) {
+                const idStr = String(folder.id);
+                foldersMap.set(idStr, {
+                    id: folder.id,
+                    idStr: idStr,
+                    name: folder.name,
+                    databases: []
+                });
             }
+        }
 
-            let html = '<div class="folders-list">';
-            for (const folder of foldersMap.values()) {
-                html += `
-                    <div class="folder-item">
-                        <div class="folder-header" onclick="toggleFolder(${folder.id})">
-                            <span class="folder-name">📁 ${escapeHtml(folder.name)}</span>
-                            <span class="folder-toggle">▼</span>
+        const databasesWithoutFolder = [];
+        const orphanedDatabases = [];
+
+        if (dbsData.databases) {
+            for (const db of dbsData.databases) {
+                const folderId = db.folderId;
+                const folderIdStr = folderId ? String(folderId) : null;
+
+                if (!folderIdStr) {
+                    databasesWithoutFolder.push(db);
+                } else if (foldersMap.has(folderIdStr)) {
+                    foldersMap.get(folderIdStr).databases.push(db);
+                } else {
+                    orphanedDatabases.push(db);
+                }
+            }
+        }
+
+        let html = '<div class="folders-list">';
+
+        // Нормальные папки
+        const sortedFolders = Array.from(foldersMap.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        for (const folder of sortedFolders) {
+            const dbCount = folder.databases.length;
+            const safeId = folder.idStr.replace(/[^a-zA-Z0-9]/g, '_');
+
+            html += `
+                <div class="folder-item">
+                    <div class="folder-header" onclick="toggleFolder('${safeId}')">
+                        <span class="folder-name">📁 ${escapeHtml(folder.name)} ${dbCount ? `(${dbCount})` : '(пусто)'}</span>
+                        <div class="folder-actions" onclick="event.stopPropagation()">
+                            <button class="btn-folder-edit" onclick="editFolder(${folder.id}, '${escapeHtml(folder.name)}')" title="Редактировать">✏️</button>
+                            <button class="btn-folder-delete" onclick="deleteFolder(${folder.id}, '${escapeHtml(folder.name)}', ${dbCount})" title="Удалить">🗑️</button>
                         </div>
-                        <div class="folder-databases" id="folder-dbs-${folder.id}">
-                `;
+                        <span class="folder-toggle">▼</span>
+                    </div>
+                    <div class="folder-databases" id="folder-dbs-${safeId}" style="display: none;">
+            `;
 
+            if (dbCount > 0) {
                 for (const db of folder.databases) {
                     const isVisible = (db.isVisible !== undefined && db.isVisible !== null) ? db.isVisible : true;
-                    html += `
-                        <div class="folder-db-item">
-                            <div>
-                                <span class="folder-db-name">${escapeHtml(db.dbName)}</span>
-                                <span class="folder-db-display">(${escapeHtml(db.displayName)})</span>
-                                <span class="folder-db-display">📊 лимит: ${db.maxRows || 20} строк</span>
-                            </div>
-                            <div class="db-actions">
-                                <button class="btn-edit" onclick="editDatabase('${escapeHtml(db.dbName)}', '${escapeHtml(db.displayName)}', ${db.folderId || 0}, ${isVisible}, '${escapeHtml(db.accessStart || '')}', '${escapeHtml(db.accessEnd || '')}', ${db.maxRows || 20})">✏️ Редактировать</button>
-                                <button class="btn-delete" onclick="deleteDatabase('${escapeHtml(db.dbName)}')">Удалить</button>
-                            </div>
-                        </div>
-                    `;
+                    html += renderDatabaseRow(db, isVisible, false, false);
                 }
-
-                html += `
-                        </div>
-                    </div>
-                `;
+            } else {
+                html += '<div class="empty-folder">✨ Папка пуста</div>';
             }
-            html += '</div>';
-            container.innerHTML = html;
+
+            html += `</div></div>`;
+        }
+
+        // Базы без папки
+        if (databasesWithoutFolder.length > 0) {
+            html += `
+                <div class="folder-item warning-folder">
+                    <div class="folder-header" onclick="toggleFolder('no-folder')">
+                        <span class="folder-name">⚠️ Базы данных без папки (${databasesWithoutFolder.length})</span>
+                        <span class="folder-toggle">▼</span>
+                    </div>
+                    <div class="folder-databases" id="folder-dbs-no-folder" style="display: none;">
+            `;
+            for (const db of databasesWithoutFolder) {
+                const isVisible = (db.isVisible !== undefined && db.isVisible !== null) ? db.isVisible : true;
+                html += renderDatabaseRow(db, isVisible, false, true);
+            }
+            html += `</div></div>`;
+        }
+
+        // Битые базы
+        if (orphanedDatabases.length > 0) {
+            html += `
+                <div class="folder-item error-folder">
+                    <div class="folder-header" onclick="toggleFolder('orphaned')">
+                        <span class="folder-name">❌ Базы с несуществующей папкой (${orphanedDatabases.length})</span>
+                        <span class="folder-toggle">▼</span>
+                    </div>
+                    <div class="folder-databases" id="folder-dbs-orphaned" style="display: none;">
+            `;
+            for (const db of orphanedDatabases) {
+                const isVisible = (db.isVisible !== undefined && db.isVisible !== null) ? db.isVisible : true;
+                html += renderDatabaseRow(db, isVisible, true, false);
+            }
+            html += `</div></div>`;
+        }
+
+        html += '</div>';
+
+        if (foldersMap.size === 0 && databasesWithoutFolder.length === 0 && orphanedDatabases.length === 0) {
+            container.innerHTML = '<div class="empty-state">📁 Нет папок и баз данных. Создайте папку или загрузите базу.</div>';
         } else {
-            container.innerHTML = '<div class="empty-state">Нет баз данных</div>';
+            container.innerHTML = html;
         }
     } catch (e) {
-        console.error('Failed to load databases list:', e);
-        document.getElementById('foldersList').innerHTML = '<div class="empty-state">Ошибка загрузки</div>';
+        console.error('Failed to load folders list:', e);
+        container.innerHTML = `<div class="empty-state">❌ Ошибка загрузки: ${e.message}<br><br><button onclick="loadFoldersList()" class="btn btn-secondary">🔄 Повторить</button></div>`;
     }
 }
 
-window.toggleFolder = function(folderId) {
-    const dbsContainer = document.getElementById(`folder-dbs-${folderId}`);
-    const toggle = dbsContainer.previousElementSibling.querySelector('.folder-toggle');
-    if (dbsContainer.classList.contains('open')) {
-        dbsContainer.classList.remove('open');
-        toggle.textContent = '▼';
-    } else {
-        dbsContainer.classList.add('open');
-        toggle.textContent = '▲';
-    }
+/**
+ * Переключает видимость (разворачивает/сворачивает) папки
+ * @param {string} safeId - безопасный идентификатор папки
+ */
+window.toggleFolder = function(safeId) {
+    const dbsContainer = document.getElementById(`folder-dbs-${safeId}`);
+    if (!dbsContainer) return;
+
+    const isHidden = dbsContainer.style.display === 'none' || dbsContainer.style.display === '';
+    dbsContainer.style.display = isHidden ? 'flex' : 'none';
+
+    const folderItem = dbsContainer.closest('.folder-item');
+    const toggle = folderItem ? folderItem.querySelector('.folder-toggle') : null;
+    if (toggle) toggle.textContent = isHidden ? '▲' : '▼';
 };
 
 // ============================================
-// Быстрое создание папки в форме загрузки БД
+// БЫСТРОЕ СОЗДАНИЕ ПАПКИ В ФОРМЕ ЗАГРУЗКИ БД
 // ============================================
 
 const quickCreateFolderBtn = document.getElementById('quickCreateFolderBtn');
@@ -241,21 +378,21 @@ const quickCreateCancelBtn = document.getElementById('quickCreateCancelBtn');
 
 if (quickCreateFolderBtn) {
     quickCreateFolderBtn.addEventListener('click', () => {
-        quickFolderForm.style.display = 'block';
-        quickFolderName.focus();
+        if (quickFolderForm) quickFolderForm.style.display = 'block';
+        if (quickFolderName) quickFolderName.focus();
     });
 }
 
 if (quickCreateCancelBtn) {
     quickCreateCancelBtn.addEventListener('click', () => {
-        quickFolderForm.style.display = 'none';
-        quickFolderName.value = '';
+        if (quickFolderForm) quickFolderForm.style.display = 'none';
+        if (quickFolderName) quickFolderName.value = '';
     });
 }
 
 if (quickCreateConfirmBtn) {
     quickCreateConfirmBtn.addEventListener('click', async () => {
-        const folderName = quickFolderName.value.trim();
+        const folderName = quickFolderName ? quickFolderName.value.trim() : '';
         if (!folderName) {
             alert('Введите название папки');
             return;
@@ -264,21 +401,16 @@ if (quickCreateConfirmBtn) {
         const params = new URLSearchParams();
         params.append('action', 'createFolder');
         params.append('folderName', folderName);
-        if (csrfToken) params.append('csrf_token', csrfToken);
+        addCsrfToParams(params);
 
         try {
-            const response = await fetch('/api/teacher', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: params
-            });
+            const response = await fetch('/api/teacher', { method: 'POST', body: params });
             const data = await response.json();
             if (data.success) {
-                quickFolderForm.style.display = 'none';
-                quickFolderName.value = '';
-                await loadFoldersForSelect();
-                await loadFoldersList();
-                alert('Папка "' + folderName + '" создана');
+                if (quickFolderForm) quickFolderForm.style.display = 'none';
+                if (quickFolderName) quickFolderName.value = '';
+                await Promise.all([loadFoldersForSelect(), loadFoldersList()]);
+                alert(`Папка "${folderName}" создана`);
             } else {
                 alert('Ошибка: ' + data.error);
             }
@@ -289,40 +421,242 @@ if (quickCreateConfirmBtn) {
 }
 
 // ============================================
-// Управление базами данных
+// УПРАВЛЕНИЕ БАЗАМИ ДАННЫХ
 // ============================================
 
+/**
+ * Загружает список баз для выпадающего списка загрузки схемы (только нормальные базы)
+ */
 async function loadDatabasesForSchemaSelect() {
+    const select = document.getElementById('schemaDbSelect');
+    if (!select) return;
+
     try {
-        const response = await fetch('/api/teacher?action=list');
+        const response = await fetch('/api/teacher?action=listNormalDatabases');
         const data = await response.json();
-        const select = document.getElementById('schemaDbSelect');
         select.innerHTML = '<option value="">Выберите базу</option>';
+
         if (data.databases) {
             for (const db of data.databases) {
                 const option = document.createElement('option');
                 option.value = db.dbName;
-                option.textContent = db.displayName + ' (' + db.dbName + ')';
+                option.textContent = `${db.displayName} (${db.dbName})`;
                 option.dataset.schemaUrl = db.schemaImageUrl || '';
                 select.appendChild(option);
             }
         }
+
+        if (select.options.length === 1) {
+            select.innerHTML = '<option value="">Нет доступных баз данных</option>';
+        }
     } catch (e) {
         console.error('Failed to load databases for schema select:', e);
+        select.innerHTML = '<option value="">Ошибка загрузки</option>';
     }
 }
 
-const schemaSelect = document.getElementById('schemaDbSelect');
-if (schemaSelect) {
-    schemaSelect.addEventListener('change', function() {
+/**
+ * Загружает список баз для выпадающего списка генерации вопросов Moodle (только нормальные базы)
+ */
+async function loadDatabasesForMoodleSelect() {
+    const select = document.getElementById('moodleDbSelect');
+    if (!select) return;
+
+    try {
+        const response = await fetch('/api/teacher?action=listNormalDatabases');
+        const data = await response.json();
+        select.innerHTML = '<option value="">Выберите базу</option>';
+
+        if (data.databases) {
+            for (const db of data.databases) {
+                const option = document.createElement('option');
+                option.value = db.dbName;
+                option.textContent = `${db.displayName} (${db.dbName})`;
+                select.appendChild(option);
+            }
+        }
+
+        if (select.options.length === 1) {
+            select.innerHTML = '<option value="">Нет доступных баз данных</option>';
+        }
+    } catch (e) {
+        console.error('Failed to load databases for moodle select:', e);
+        select.innerHTML = '<option value="">Ошибка загрузки</option>';
+    }
+}
+
+/**
+ * Удаляет базу данных
+ * @param {string} dbName - имя базы данных
+ */
+window.deleteDatabase = async function(dbName) {
+    if (!confirm(`Удалить базу данных "${dbName}"? Это действие необратимо.`)) return;
+
+    const params = new URLSearchParams();
+    params.append('action', 'delete');
+    params.append('dbName', dbName);
+    addCsrfToParams(params);
+
+    try {
+        const response = await fetch('/api/teacher', { method: 'POST', body: params });
+        const data = await response.json();
+        if (data.success) {
+            alert('База данных удалена');
+            await Promise.all([
+                loadFoldersList(),
+                loadFoldersForSelect(),
+                loadDatabasesForSchemaSelect(),
+                loadDatabasesForMoodleSelect()
+            ]);
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (e) {
+        alert('Ошибка соединения');
+    }
+};
+
+// ============================================
+// РЕДАКТИРОВАНИЕ БАЗЫ ДАННЫХ
+// ============================================
+
+/**
+ * Открывает модальное окно редактирования метаданных базы данных
+ */
+window.editDatabase = function(dbName, displayName, folderId, isVisible, accessStart, accessEnd, maxRows) {
+    const editDbName = document.getElementById('editDbName');
+    const editDisplayName = document.getElementById('editDisplayName');
+    const editAccessPassword = document.getElementById('editAccessPassword');
+    const editRemovePasswordCheckbox = document.getElementById('editRemovePasswordCheckbox');
+    const editMaxRows = document.getElementById('editMaxRows');
+    const editIsVisible = document.getElementById('editIsVisible');
+    const editAccessStart = document.getElementById('editAccessStart');
+    const editAccessEnd = document.getElementById('editAccessEnd');
+    const editCsrfField = document.getElementById('editCsrfToken');
+
+    if (editDbName) editDbName.value = dbName;
+    if (editDisplayName) editDisplayName.value = displayName || '';
+    if (editAccessPassword) editAccessPassword.value = '';
+    if (editRemovePasswordCheckbox) editRemovePasswordCheckbox.checked = false;
+    if (editMaxRows) editMaxRows.value = maxRows || 20;
+    if (editIsVisible) editIsVisible.value = (isVisible !== undefined && isVisible !== null) ? (isVisible ? 'true' : 'false') : 'true';
+    if (editAccessStart) editAccessStart.value = accessStart || '';
+    if (editAccessEnd) editAccessEnd.value = accessEnd || '';
+    if (editCsrfField && csrfToken) editCsrfField.value = csrfToken;
+
+    fetch('/api/teacher?action=listFolders')
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('editFolderId');
+            if (!select) return;
+            select.innerHTML = '';
+
+            if (data.folders) {
+                for (const folder of data.folders) {
+                    const option = document.createElement('option');
+                    option.value = folder.id;
+                    option.textContent = folder.name;
+                    if (folder.id == folderId) option.selected = true;
+                    select.appendChild(option);
+                }
+            }
+
+            const modal = document.getElementById('editDatabaseModal');
+            if (modal) modal.style.display = 'flex';
+        })
+        .catch(error => {
+            console.error('Failed to load folders:', error);
+            alert('Ошибка загрузки списка папок');
+        });
+};
+
+/**
+ * Закрывает модальное окно редактирования базы данных
+ */
+window.closeEditModal = function() {
+    const modal = document.getElementById('editDatabaseModal');
+    if (modal) modal.style.display = 'none';
+};
+
+/**
+ * Сохраняет изменения метаданных базы данных
+ */
+window.saveDatabaseMetadata = async function() {
+    const editDbName = document.getElementById('editDbName');
+    const editDisplayName = document.getElementById('editDisplayName');
+    const editFolderId = document.getElementById('editFolderId');
+    const editAccessPassword = document.getElementById('editAccessPassword');
+    const editRemovePasswordCheckbox = document.getElementById('editRemovePasswordCheckbox');
+    const editIsVisible = document.getElementById('editIsVisible');
+    const editAccessStart = document.getElementById('editAccessStart');
+    const editAccessEnd = document.getElementById('editAccessEnd');
+    const editMaxRows = document.getElementById('editMaxRows');
+
+    if (!editDbName || !editFolderId) return;
+
+    const formData = new URLSearchParams();
+    formData.append('action', 'updateDatabaseMetadata');
+    formData.append('dbName', editDbName.value);
+
+    if (editDisplayName && editDisplayName.value) formData.append('displayName', editDisplayName.value);
+
+    const folderId = editFolderId.value;
+    if (folderId) {
+        formData.append('folderId', folderId);
+    } else {
+        alert('Выберите папку');
+        return;
+    }
+
+    addCsrfToParams(formData);
+
+    if (editRemovePasswordCheckbox && editRemovePasswordCheckbox.checked) {
+        formData.append('removePassword', 'true');
+    } else if (editAccessPassword && editAccessPassword.value) {
+        formData.append('accessPassword', editAccessPassword.value);
+    }
+
+    if (editIsVisible) formData.append('isVisible', editIsVisible.value);
+    if (editAccessStart && editAccessStart.value) formData.append('accessStart', editAccessStart.value);
+    if (editAccessEnd && editAccessEnd.value) formData.append('accessEnd', editAccessEnd.value);
+    if (editMaxRows && editMaxRows.value) formData.append('maxRows', editMaxRows.value);
+
+    try {
+        const response = await fetch('/api/teacher', { method: 'POST', body: formData });
+        const data = await response.json();
+        if (data.success) {
+            alert('Метаданные обновлены');
+            window.closeEditModal();
+            await Promise.all([
+                loadFoldersList(),
+                loadFoldersForSelect(),
+                loadDatabasesForSchemaSelect(),
+                loadDatabasesForMoodleSelect()
+            ]);
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (e) {
+        alert('Ошибка соединения');
+    }
+};
+
+// ============================================
+// ЗАГРУЗКА СХЕМЫ
+// ============================================
+
+const schemaDbSelect = document.getElementById('schemaDbSelect');
+if (schemaDbSelect) {
+    schemaDbSelect.addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
-        const schemaUrl = selectedOption.dataset.schemaUrl;
+        const schemaUrl = selectedOption ? selectedOption.dataset.schemaUrl : null;
         const previewContainer = document.getElementById('schemaPreview');
         const previewImg = document.getElementById('schemaPreviewImg');
-        if (schemaUrl && schemaUrl !== 'null' && schemaUrl !== '') {
+
+        if (previewContainer && previewImg && schemaUrl && schemaUrl !== 'null' && schemaUrl !== '') {
             previewImg.src = schemaUrl;
             previewContainer.style.display = 'block';
-        } else {
+        } else if (previewContainer) {
             previewContainer.style.display = 'none';
         }
     });
@@ -333,9 +667,9 @@ if (uploadSchemaForm) {
     uploadSchemaForm.addEventListener('submit', async function(e) {
         e.preventDefault();
 
-        const dbName = document.getElementById('schemaDbSelect').value;
+        const dbName = document.getElementById('schemaDbSelect') ? document.getElementById('schemaDbSelect').value : '';
         const fileInput = document.getElementById('schemaImage');
-        const file = fileInput.files[0];
+        const file = fileInput ? fileInput.files[0] : null;
 
         if (!dbName) {
             alert('Выберите базу данных');
@@ -350,19 +684,15 @@ if (uploadSchemaForm) {
         formData.append('action', 'uploadSchema');
         formData.append('dbName', dbName);
         formData.append('schemaImage', file);
-        if (csrfToken) formData.append('csrf_token', csrfToken);
+        addCsrfToFormData(formData);
 
         try {
-            const response = await fetch('/api/teacher', {
-                method: 'POST',
-                body: formData
-            });
+            const response = await fetch('/api/teacher', { method: 'POST', body: formData });
             const data = await response.json();
             if (data.success) {
                 alert('Схема успешно загружена');
-                loadFoldersList();
-                loadDatabasesForSchemaSelect();
-                fileInput.value = '';
+                await Promise.all([loadFoldersList(), loadDatabasesForSchemaSelect()]);
+                if (fileInput) fileInput.value = '';
                 updateSchemaFileLabel(fileInput);
             } else {
                 alert('Ошибка: ' + data.error);
@@ -373,173 +703,18 @@ if (uploadSchemaForm) {
     });
 }
 
-window.deleteDatabase = async function(dbName) {
-    if (!confirm('Удалить базу данных "' + dbName + '"? Это действие необратимо.')) return;
-
-    const params = new URLSearchParams();
-    params.append('action', 'delete');
-    params.append('dbName', dbName);
-    if (csrfToken) params.append('csrf_token', csrfToken);
-
-    try {
-        const response = await fetch('/api/teacher', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params
-        });
-        const data = await response.json();
-        if (data.success) {
-            alert('База данных удалена');
-            loadFoldersList();
-            loadFoldersForSelect();
-            loadDatabasesForSchemaSelect();
-            loadDatabasesForMoodleSelect();
-        } else {
-            alert('Ошибка: ' + data.error);
-        }
-    } catch (e) {
-        alert('Ошибка соединения');
-    }
-};
-
 // ============================================
-// Редактирование базы данных
+// ГЕНЕРАЦИЯ ВОПРОСОВ ДЛЯ MOODLE
 // ============================================
 
-window.editDatabase = function(dbName, displayName, folderId, isVisible, accessStart, accessEnd, maxRows) {
-    document.getElementById('editDbName').value = dbName;
-    document.getElementById('editDisplayName').value = displayName || '';
-    document.getElementById('editAccessPassword').value = '';
-    document.getElementById('editRemovePasswordCheckbox').checked = false;
-    document.getElementById('editMaxRows').value = maxRows || 20;
-
-    const visibleValue = (isVisible !== undefined && isVisible !== null) ? isVisible : true;
-    document.getElementById('editIsVisible').value = visibleValue ? 'true' : 'false';
-
-    document.getElementById('editAccessStart').value = accessStart || '';
-    document.getElementById('editAccessEnd').value = accessEnd || '';
-
-    const editCsrfField = document.getElementById('editCsrfToken');
-    if (editCsrfField && csrfToken) {
-        editCsrfField.value = csrfToken;
-    }
-
-    fetch('/api/teacher?action=listFolders')
-        .then(response => response.json())
-        .then(data => {
-            const select = document.getElementById('editFolderId');
-            select.innerHTML = '';
-            if (data.folders && data.folders.length > 0) {
-                for (const folder of data.folders) {
-                    const option = document.createElement('option');
-                    option.value = folder.id;
-                    option.textContent = folder.name;
-                    if (folder.id == folderId) option.selected = true;
-                    select.appendChild(option);
-                }
-            } else {
-                const option = document.createElement('option');
-                option.value = '';
-                option.textContent = 'Нет доступных папок';
-                select.appendChild(option);
-            }
-            document.getElementById('editDatabaseModal').style.display = 'flex';
-        })
-        .catch(error => {
-            console.error('Failed to load folders:', error);
-            alert('Ошибка загрузки списка папок');
-        });
-};
-
-window.closeEditModal = function() {
-    document.getElementById('editDatabaseModal').style.display = 'none';
-};
-
-window.saveDatabaseMetadata = async function() {
-    const dbName = document.getElementById('editDbName').value;
-    const displayName = document.getElementById('editDisplayName').value;
-    const folderId = document.getElementById('editFolderId').value;
-    const accessPassword = document.getElementById('editAccessPassword').value;
-    const removePassword = document.getElementById('editRemovePasswordCheckbox').checked;
-    const isVisible = document.getElementById('editIsVisible').value;
-    const accessStart = document.getElementById('editAccessStart').value;
-    const accessEnd = document.getElementById('editAccessEnd').value;
-    const maxRows = document.getElementById('editMaxRows').value;
-
-    const formData = new URLSearchParams();
-    formData.append('action', 'updateDatabaseMetadata');
-    formData.append('dbName', dbName);
-    if (displayName) formData.append('displayName', displayName);
-    if (folderId) formData.append('folderId', folderId);
-    if (csrfToken) formData.append('csrf_token', csrfToken);
-
-    if (removePassword) {
-        formData.append('removePassword', 'true');
-    } else if (accessPassword) {
-        formData.append('accessPassword', accessPassword);
-    }
-
-    formData.append('isVisible', isVisible);
-    if (accessStart) formData.append('accessStart', accessStart);
-    if (accessEnd) formData.append('accessEnd', accessEnd);
-    if (maxRows) formData.append('maxRows', maxRows);
-
-    try {
-        const response = await fetch('/api/teacher', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: formData
-        });
-        const data = await response.json();
-        if (data.success) {
-            alert('Метаданные обновлены');
-            closeEditModal();
-            loadFoldersList();
-            loadFoldersForSelect();
-            loadDatabasesForSchemaSelect();
-            loadDatabasesForMoodleSelect();
-        } else {
-            alert('Ошибка: ' + data.error);
-        }
-    } catch (e) {
-        alert('Ошибка соединения');
-    }
-};
-
-// ============================================
-// Генерация вопросов для Moodle
-// ============================================
-
+/**
+ * Обновляет метку выбранного файла с вопросами для Moodle
+ * @param {HTMLInputElement} input - элемент input file
+ */
 function updateMoodleFileLabel(input) {
-    const fileNameSpan = document.getElementById('moodleFileName');
-    if (!fileNameSpan) return;
-
-    if (input.files && input.files.length > 0) {
-        const fileName = input.files[0].name;
-        fileNameSpan.textContent = '📄 ' + fileName;
-    } else {
-        fileNameSpan.textContent = 'Выберите файл (.txt)';
-    }
-}
-
-async function loadDatabasesForMoodleSelect() {
-    const select = document.getElementById('moodleDbSelect');
-    if (!select) return;
-
-    try {
-        const response = await fetch('/api/teacher?action=list');
-        const data = await response.json();
-        select.innerHTML = '<option value="">Выберите базу</option>';
-        if (data.databases) {
-            for (const db of data.databases) {
-                const option = document.createElement('option');
-                option.value = db.dbName;
-                option.textContent = db.displayName + ' (' + db.dbName + ')';
-                select.appendChild(option);
-            }
-        }
-    } catch (e) {
-        console.error('Failed to load databases for moodle select:', e);
+    const span = document.getElementById('moodleFileName');
+    if (span) {
+        span.textContent = (input.files && input.files.length > 0) ? `📄 ${input.files[0].name}` : 'Выберите файл (.txt)';
     }
 }
 
@@ -548,11 +723,12 @@ if (moodleForm) {
     moodleForm.addEventListener('submit', async function(e) {
         e.preventDefault();
 
-        const dbName = document.getElementById('moodleDbSelect').value;
-        const category = document.getElementById('moodleCategory').value;
-        const format = document.getElementById('moodleFormat') ? document.getElementById('moodleFormat').value : 'gift';
+        const dbName = document.getElementById('moodleDbSelect') ? document.getElementById('moodleDbSelect').value : '';
+        const category = document.getElementById('moodleCategory') ? document.getElementById('moodleCategory').value : '';
+        const formatSelect = document.getElementById('moodleFormat');
+        const format = formatSelect ? formatSelect.value : 'gift';
         const fileInput = document.getElementById('questionsFile');
-        const file = fileInput.files[0];
+        const file = fileInput ? fileInput.files[0] : null;
 
         if (!dbName) {
             alert('Выберите базу данных');
@@ -568,47 +744,216 @@ if (moodleForm) {
         formData.append('category', category);
         formData.append('format', format);
         formData.append('questionsFile', file);
-        if (csrfToken) formData.append('csrf_token', csrfToken);
+        addCsrfToFormData(formData);
 
         const resultDiv = document.getElementById('moodleResult');
-        resultDiv.style.display = 'block';
-        resultDiv.innerHTML = '<div class="empty-state">⏳ Генерация...</div>';
+        if (resultDiv) {
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div class="empty-state">⏳ Генерация...</div>';
+        }
 
         try {
-            const response = await fetch('/api/teacher/moodle', {
-                method: 'POST',
-                body: formData
-            });
-
+            const response = await fetch('/api/teacher/moodle', { method: 'POST', body: formData });
             if (response.ok) {
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                let extension = '';
-                if (format === 'gift') extension = '.gift';
-                else if (format === 'xml') extension = '.xml';
-                else extension = '.txt';
-                a.download = `moodle_questions_${Date.now()}${extension}`;
+                const ext = format === 'gift' ? '.gift' : (format === 'xml' ? '.xml' : '.txt');
+                a.download = `moodle_questions_${Date.now()}${ext}`;
                 a.href = url;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
 
-                resultDiv.innerHTML = '<div class="empty-state" style="color: green;">✅ Файл сгенерирован и скачан</div>';
-                setTimeout(() => resultDiv.style.display = 'none', 3000);
+                if (resultDiv) {
+                    resultDiv.innerHTML = '<div class="empty-state" style="color: green;">✅ Файл сгенерирован и скачан</div>';
+                    setTimeout(() => resultDiv.style.display = 'none', 3000);
+                }
             } else {
                 const error = await response.json();
-                resultDiv.innerHTML = `<div class="empty-state" style="color: red;">❌ Ошибка: ${error.error || 'Неизвестная ошибка'}</div>`;
+                if (resultDiv) {
+                    resultDiv.innerHTML = `<div class="empty-state" style="color: red;">❌ Ошибка: ${error.error || 'Неизвестная ошибка'}</div>`;
+                }
             }
         } catch (err) {
-            resultDiv.innerHTML = `<div class="empty-state" style="color: red;">❌ Ошибка: ${err.message}</div>`;
+            if (resultDiv) {
+                resultDiv.innerHTML = `<div class="empty-state" style="color: red;">❌ Ошибка: ${err.message}</div>`;
+            }
         }
     });
 }
 
 // ============================================
-// Загрузка SQL-скрипта
+// РАСШИРЕННОЕ УПРАВЛЕНИЕ ПАПКАМИ
+// ============================================
+
+/**
+ * Открывает диалог редактирования названия папки
+ * @param {number} folderId - идентификатор папки
+ * @param {string} currentName - текущее название папки
+ */
+window.editFolder = function(folderId, currentName) {
+    const newName = prompt('Введите новое название папки:', currentName);
+    if (newName && newName.trim() && newName !== currentName) {
+        updateFolderName(folderId, newName.trim());
+    } else if (newName === '') {
+        alert('Название папки не может быть пустым');
+    }
+};
+
+/**
+ * Отправляет запрос на обновление названия папки
+ * @param {number} folderId - идентификатор папки
+ * @param {string} newName - новое название папки
+ */
+async function updateFolderName(folderId, newName) {
+    const params = new URLSearchParams();
+    params.append('action', 'updateFolder');
+    params.append('folderId', folderId);
+    params.append('folderName', newName);
+    addCsrfToParams(params);
+
+    try {
+        const response = await fetch('/api/teacher', { method: 'POST', body: params });
+        const data = await response.json();
+        if (data.success) {
+            alert('Название папки изменено');
+            await Promise.all([
+                loadFoldersList(),
+                loadFoldersForSelect(),
+                loadDatabasesForSchemaSelect(),
+                loadDatabasesForMoodleSelect()
+            ]);
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (e) {
+        alert('Ошибка соединения: ' + e.message);
+    }
+}
+
+/**
+ * Удаляет папку (только если она пуста)
+ * @param {number} folderId - идентификатор папки
+ * @param {string} folderName - название папки
+ * @param {number} dbCount - количество баз данных в папке
+ */
+window.deleteFolder = async function(folderId, folderName, dbCount) {
+    if (dbCount > 0) {
+        alert(`Невозможно удалить папку "${folderName}": в ней находится ${dbCount} баз(ы) данных. Сначала переместите или удалите базы данных.`);
+        return;
+    }
+    if (!confirm(`Удалить папку "${folderName}"? Папка пуста, удаление безопасно.`)) return;
+
+    const params = new URLSearchParams();
+    params.append('action', 'deleteFolder');
+    params.append('folderId', folderId);
+    addCsrfToParams(params);
+
+    try {
+        const response = await fetch('/api/teacher', { method: 'POST', body: params });
+        const data = await response.json();
+        if (data.success) {
+            alert('Папка удалена');
+            await Promise.all([
+                loadFoldersList(),
+                loadFoldersForSelect(),
+                loadDatabasesForSchemaSelect(),
+                loadDatabasesForMoodleSelect()
+            ]);
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (e) {
+        alert('Ошибка соединения: ' + e.message);
+    }
+};
+
+/**
+ * Открывает диалог перемещения базы данных в другую папку
+ * @param {string} dbName - имя базы данных
+ * @param {number} currentFolderId - текущий идентификатор папки
+ */
+window.moveDatabaseToFolder = async function(dbName, currentFolderId) {
+    try {
+        const response = await fetch('/api/teacher?action=listFolders');
+        const data = await response.json();
+
+        if (!data.folders || data.folders.length === 0) {
+            alert('Нет доступных папок для перемещения. Сначала создайте папку.');
+            return;
+        }
+
+        const availableFolders = data.folders.filter(f => f.id != currentFolderId);
+        if (availableFolders.length === 0) {
+            alert('Нет других папок для перемещения');
+            return;
+        }
+
+        let message = 'Выберите папку для перемещения базы данных:\n\n';
+        availableFolders.forEach((f, i) => {
+            message += `${i + 1}. ${f.name} (ID: ${f.id})\n`;
+        });
+        message += '\nВведите номер или ID папки:';
+
+        const userInput = prompt(message);
+        if (!userInput) return;
+
+        let targetFolderId = null;
+        const inputNum = parseInt(userInput);
+
+        if (!isNaN(inputNum) && inputNum >= 1 && inputNum <= availableFolders.length) {
+            targetFolderId = availableFolders[inputNum - 1].id;
+        } else {
+            const folder = availableFolders.find(f => f.id == userInput);
+            if (folder) {
+                targetFolderId = folder.id;
+            } else {
+                alert('Неверный выбор. Операция отменена.');
+                return;
+            }
+        }
+
+        await executeMoveDatabase(dbName, targetFolderId);
+    } catch (e) {
+        alert('Ошибка загрузки списка папок: ' + e.message);
+    }
+};
+
+/**
+ * Выполняет перемещение базы данных в указанную папку
+ * @param {string} dbName - имя базы данных
+ * @param {number} targetFolderId - идентификатор целевой папки
+ */
+async function executeMoveDatabase(dbName, targetFolderId) {
+    const params = new URLSearchParams();
+    params.append('action', 'moveDatabaseToFolder');
+    params.append('dbName', dbName);
+    params.append('targetFolderId', targetFolderId);
+    addCsrfToParams(params);
+
+    try {
+        const response = await fetch('/api/teacher', { method: 'POST', body: params });
+        const data = await response.json();
+        if (data.success) {
+            alert('База данных перемещена');
+            await Promise.all([
+                loadFoldersList(),
+                loadFoldersForSelect(),
+                loadDatabasesForSchemaSelect(),
+                loadDatabasesForMoodleSelect()
+            ]);
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (e) {
+        alert('Ошибка соединения: ' + e.message);
+    }
+}
+
+// ============================================
+// ЗАГРУЗКА SQL-СКРИПТА
 // ============================================
 
 const uploadForm = document.getElementById('uploadForm');
@@ -616,12 +961,12 @@ if (uploadForm) {
     uploadForm.addEventListener('submit', function(e) {
         e.preventDefault();
 
-        const dbName = document.getElementById('dbName').value.trim();
-        const folderId = document.getElementById('folderSelect').value;
-        const displayName = document.getElementById('displayName').value.trim();
-        const accessPassword = document.getElementById('accessPassword').value;
+        const dbName = document.getElementById('dbName') ? document.getElementById('dbName').value.trim() : '';
+        const folderId = document.getElementById('folderSelect') ? document.getElementById('folderSelect').value : '';
+        const displayName = document.getElementById('displayName') ? document.getElementById('displayName').value.trim() : '';
+        const accessPassword = document.getElementById('accessPassword') ? document.getElementById('accessPassword').value : '';
         const fileInput = document.getElementById('sqlFile');
-        const file = fileInput.files[0];
+        const file = fileInput ? fileInput.files[0] : null;
         const maxRowsInput = document.getElementById('maxRows');
         const maxRows = maxRowsInput ? maxRowsInput.value : '20';
 
@@ -630,7 +975,7 @@ if (uploadForm) {
             return;
         }
         if (!folderId) {
-            alert('Выберите папку');
+            alert('Выберите папку для базы данных');
             return;
         }
         if (!file) {
@@ -643,10 +988,10 @@ if (uploadForm) {
         const loadingStatus = document.getElementById('loadingStatus');
         const logMessages = document.getElementById('logMessages');
 
-        overlay.style.display = 'flex';
-        progressFill.style.width = '10%';
-        loadingStatus.textContent = 'Отправка файла...';
-        logMessages.innerHTML = '';
+        if (overlay) overlay.style.display = 'flex';
+        if (progressFill) progressFill.style.width = '10%';
+        if (loadingStatus) loadingStatus.textContent = 'Отправка файла...';
+        if (logMessages) logMessages.innerHTML = '';
         addLogMessage('Начало загрузки файла: ' + file.name, 'info');
 
         const formData = new FormData();
@@ -657,7 +1002,7 @@ if (uploadForm) {
         if (accessPassword) formData.append('accessPassword', accessPassword);
         if (folderId) formData.append('folderId', folderId);
         if (maxRows) formData.append('maxRows', maxRows);
-        if (csrfToken) formData.append('csrf_token', csrfToken);
+        addCsrfToFormData(formData);
 
         const eventSource = new EventSource('/api/logs');
 
@@ -668,8 +1013,8 @@ if (uploadForm) {
                     addLogMessage('Начало выполнения скрипта. Всего запросов: ' + data.total, 'info');
                 } else if (data.type === 'progress') {
                     const percent = Math.round((data.current / data.total) * 100);
-                    progressFill.style.width = percent + '%';
-                    loadingStatus.textContent = 'Выполнение: ' + percent + '% (' + data.current + '/' + data.total + ')';
+                    if (progressFill) progressFill.style.width = percent + '%';
+                    if (loadingStatus) loadingStatus.textContent = `Выполнение: ${percent}% (${data.current}/${data.total})`;
                     addLogMessage('▶ ' + (data.query || 'Выполнение запроса...'), 'info');
                 } else if (data.type === 'success') {
                     addLogMessage('✅ ' + data.message, 'success');
@@ -692,10 +1037,8 @@ if (uploadForm) {
         const xhr = new XMLHttpRequest();
 
         xhr.upload.addEventListener('progress', function(e) {
-            if (e.lengthComputable) {
-                const percent = (e.loaded / e.total) * 100;
-                progressFill.style.width = percent + '%';
-                loadingStatus.textContent = 'Загрузка файла: ' + Math.round(percent) + '%';
+            if (e.lengthComputable && progressFill) {
+                progressFill.style.width = (e.loaded / e.total) * 100 + '%';
             }
         });
 
@@ -704,41 +1047,37 @@ if (uploadForm) {
                 try {
                     const data = JSON.parse(xhr.responseText);
                     if (data.success) {
-                        progressFill.style.width = '100%';
-                        loadingStatus.textContent = 'База данных успешно создана';
+                        if (progressFill) progressFill.style.width = '100%';
+                        if (loadingStatus) loadingStatus.textContent = 'База данных успешно создана';
                         addLogMessage('✅ База данных успешно создана!', 'success');
                         setTimeout(() => {
-                            overlay.style.display = 'none';
-                            uploadForm.reset();
-                            document.getElementById('fileName').textContent = 'Выберите SQL файл';
-                            const fileUpload = document.querySelector('#uploadForm .file-upload');
-                            if (fileUpload) {
-                                fileUpload.style.borderColor = 'var(--border)';
-                                fileUpload.style.background = 'var(--light)';
-                            }
-                            document.getElementById('accessPassword').value = '';
-                            loadFoldersList();
-                            loadFoldersForSelect();
-                            loadDatabasesForSchemaSelect();
-                            loadDatabasesForMoodleSelect();
+                            if (overlay) overlay.style.display = 'none';
+                            if (uploadForm) uploadForm.reset();
+                            updateFileLabel(document.getElementById('sqlFile'));
+                            Promise.all([
+                                loadFoldersList(),
+                                loadFoldersForSelect(),
+                                loadDatabasesForSchemaSelect(),
+                                loadDatabasesForMoodleSelect()
+                            ]);
                         }, 2000);
                     } else {
-                        overlay.style.display = 'none';
+                        if (overlay) overlay.style.display = 'none';
                         addLogMessage('❌ Ошибка: ' + data.error, 'error');
                         alert('Ошибка: ' + data.error);
                     }
                 } catch (e) {
-                    overlay.style.display = 'none';
+                    if (overlay) overlay.style.display = 'none';
                     alert('Ошибка при обработке ответа сервера');
                 }
             } else {
-                overlay.style.display = 'none';
+                if (overlay) overlay.style.display = 'none';
                 alert('Ошибка соединения: ' + xhr.status);
             }
         });
 
         xhr.addEventListener('error', function() {
-            overlay.style.display = 'none';
+            if (overlay) overlay.style.display = 'none';
             alert('Ошибка соединения');
         });
 
@@ -748,17 +1087,18 @@ if (uploadForm) {
 }
 
 // ============================================
-// Инициализация
+// ИНИЦИАЛИЗАЦИЯ
 // ============================================
 
-window.updateCsrfToken = function(token) {
-    csrfToken = token;
-};
-
+/**
+ * Инициализация страницы: загрузка CSRF-токена и всех списков
+ */
 (async function init() {
     await loadCsrfToken();
-    loadFoldersForSelect();
-    loadFoldersList();
-    loadDatabasesForSchemaSelect();
-    loadDatabasesForMoodleSelect();
+    await Promise.all([
+        loadFoldersForSelect(),
+        loadFoldersList(),
+        loadDatabasesForSchemaSelect(),
+        loadDatabasesForMoodleSelect()
+    ]);
 })();
