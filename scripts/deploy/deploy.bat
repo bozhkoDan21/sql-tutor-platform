@@ -39,7 +39,7 @@ if not exist .env (
         echo TEACHER_PASSWORD=teacher123
         echo.
         echo # Limits
-        echo QUERY_TIMEOUT_SEC=3
+        echo QUERY_TIMEOUT_SEC=30
         echo MAX_ROWS=1000
         echo CONNECTION_TIMEOUT_MS=5000
         echo.

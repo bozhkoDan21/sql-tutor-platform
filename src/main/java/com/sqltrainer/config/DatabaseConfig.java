@@ -51,7 +51,7 @@ public class DatabaseConfig {
     private static final String STUDENT_PASSWORD = System.getenv().getOrDefault("DB_STUDENT_PASSWORD", "student_pass");
 
     // Ограничения для безопасности
-    private static final int QUERY_TIMEOUT_SEC = Integer.parseInt(System.getenv().getOrDefault("QUERY_TIMEOUT_SEC", "3"));
+    private static final int QUERY_TIMEOUT_SEC = Integer.parseInt(System.getenv().getOrDefault("QUERY_TIMEOUT_SEC", "30"));
     private static final int CONNECTION_TIMEOUT_MS = Integer.parseInt(System.getenv().getOrDefault("CONNECTION_TIMEOUT_MS", "5000"));
 
     static {

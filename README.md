@@ -361,7 +361,7 @@ DB_STUDENT_PASSWORD=student_pass
 TEACHER_PASSWORD=teacher123
 
 # Ограничения запросов
-QUERY_TIMEOUT_SEC=3
+QUERY_TIMEOUT_SEC=30
 CONNECTION_TIMEOUT_MS=5000
 
 # Ограничение параллельных запросов
