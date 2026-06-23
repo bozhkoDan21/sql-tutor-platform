@@ -263,32 +263,80 @@ public class MoodleGenerator {
             gift.append("{\n");
 
             if (q.isSelect() && q.getRowCount() > 0) {
-                // Для SELECT запросов правильный ответ — ХЕШ результата (16 символов)
-                // Студент должен скопировать хеш из интерфейса SQL Trainer
-                gift.append("  =").append(q.getExpectedHash()).append("\n");
-                gift.append("  ~#\n");
-                gift.append("  Комментарий для проверяющего:\n");
-                gift.append("  ----------------------------------------\n");
-                gift.append("  Ожидаемый хеш результата: ").append(q.getExpectedHash()).append("\n");
-                gift.append("  Количество строк в результате: ").append(q.getRowCount()).append("\n");
-                gift.append("  \n");
-                gift.append("  КАК ПРОВЕРЯТЬ ОТВЕТ СТУДЕНТА:\n");
-                gift.append("  1. Студент выполняет запрос в SQL Trainer\n");
-                gift.append("  2. SQL Trainer показывает хеш результата (16 символов)\n");
-                gift.append("  3. Студент копирует этот хеш в Moodle\n");
-                gift.append("  4. Moodle сравнивает хеш студента с эталонным\n");
-                gift.append("  5. Если хеши не совпадают, экспортируйте результат студента в CSV\n");
-                gift.append("     и сравните с ожидаемым результатом (см. CSV-файл)\n");
-                gift.append("  ----------------------------------------\n");
-            } else {
+                // Определяем тип ответа и формируем правильный ответ
+                String answer = determineAnswerType(q);
+                gift.append("  ").append(answer).append("\n");
+
+                // Добавляем комментарий только для хеша (не перегружаем простые ответы)
+                if (answer.startsWith("=") && answer.length() == 17) { // = + 16 символов хеша
+                    gift.append("  ~#\n");
+                    gift.append("  Комментарий для проверяющего:\n");
+                    gift.append("  ----------------------------------------\n");
+                    gift.append("  Ожидаемый хеш результата: ").append(q.getExpectedHash()).append("\n");
+                    gift.append("  Количество строк в результате: ").append(q.getRowCount()).append("\n");
+                    gift.append("  \n");
+                    gift.append("  КАК ПРОВЕРЯТЬ ОТВЕТ СТУДЕНТА:\n");
+                    gift.append("  1. Студент выполняет запрос в SQL Trainer\n");
+                    gift.append("  2. SQL Trainer показывает хеш результата (16 символов)\n");
+                    gift.append("  3. Студент копирует этот хеш в Moodle\n");
+                    gift.append("  4. Moodle сравнивает хеш студента с эталонным\n");
+                    gift.append("  5. Если хеши не совпадают, экспортируйте результат студента в CSV\n");
+                    gift.append("     и сравните с ожидаемым результатом (см. CSV-файл)\n");
+                    gift.append("  ----------------------------------------\n");
+                }
+            } else if (!q.isSelect()) {
                 // Для не-SELECT запросов используем текстовый ответ
                 gift.append("  =").append(escapeGift(q.getExpectedResult())).append("\n");
+            } else {
+                // SELECT с пустым результатом
+                gift.append("  =").append(escapeGift("Нет данных")).append("\n");
             }
 
             gift.append("}\n\n");
         }
 
         return gift.toString();
+    }
+
+    /**
+     * Определяет тип ответа для SELECT-запроса.
+     *
+     * Типы ответов:
+     * 1. Одно целое число (например, COUNT(*)) → точное число
+     * 2. Одно число с плавающей точкой (например, AVG(...)) → число с погрешностью ±0,5%
+     * 3. Одно текстовое значение → текстовая строка
+     * 4. Много строк или много колонок → SHA-256 хеш (16 символов)
+     *
+     * @param q вопрос с выполненным запросом
+     * @return строка с правильным ответом в формате GIFT
+     */
+    private static String determineAnswerType(Question q) {
+        String result = q.getExpectedResult();
+        if (result == null || result.isEmpty()) {
+            return "=" + q.getExpectedHash();
+        }
+
+        String trimmed = result.trim();
+
+        // Проверка: одно число с плавающей точкой (например, 1250.5)
+        if (trimmed.matches("^-?\\d+\\.\\d+$")) {
+            double value = Double.parseDouble(trimmed);
+            // GIFT поддерживает погрешность в процентах: =1250.5:0.5%
+            return "=" + value + ":0.5%";
+        }
+
+        // Проверка: одно целое число (например, 245)
+        if (trimmed.matches("^-?\\d+$")) {
+            return "=" + trimmed;
+        }
+
+        // Проверка: одно текстовое значение (не число, не содержит переносов строк, не содержит разделителей)
+        if (!trimmed.contains("\n") && !trimmed.contains("|")) {
+            return "=" + escapeGift(trimmed);
+        }
+
+        // Иначе — хеш (много строк или много колонок)
+        return "=" + q.getExpectedHash();
     }
 
     /**
