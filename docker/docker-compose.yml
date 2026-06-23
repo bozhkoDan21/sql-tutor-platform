@@ -8,6 +8,8 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_USER: ${DB_ADMIN_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:-postgres}
+      TZ: Europe/Moscow
+      PGTZ: Europe/Moscow
     ports:
       - "5432:5432"
     volumes:
@@ -36,24 +38,25 @@ services:
       DB_TEACHER_PASSWORD: ${DB_TEACHER_PASSWORD:-teacher_pass}
       DB_STUDENT_USER: ${DB_STUDENT_USER:-students}
       DB_STUDENT_PASSWORD: ${DB_STUDENT_PASSWORD:-student_pass}
-      TEACHER_SECRET: ${TEACHER_SECRET:-teacher123}
-      JWT_SECRET: ${JWT_SECRET:-sql-trainer-super-secret-key-2024-must-be-at-least-256-bits-long}
-      QUERY_TIMEOUT_SEC: ${QUERY_TIMEOUT_SEC:-3}
+      TEACHER_PASSWORD: ${TEACHER_PASSWORD:-teacher123}
+      QUERY_TIMEOUT_SEC: ${QUERY_TIMEOUT_SEC:-30}
       MAX_ROWS: ${MAX_ROWS:-1000}
       CONNECTION_TIMEOUT_MS: ${CONNECTION_TIMEOUT_MS:-5000}
-      JWT_ACCESS_TOKEN_EXPIRY_HOURS: ${JWT_ACCESS_TOKEN_EXPIRY_HOURS:-1}
-      JWT_REFRESH_TOKEN_EXPIRY_DAYS: ${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
-      JWT_INACTIVE_TIMEOUT_HOURS: ${JWT_INACTIVE_TIMEOUT_HOURS:-3}
       MAX_CONCURRENT_QUERIES: ${MAX_CONCURRENT_QUERIES:-10}
       SEMAPHORE_TIMEOUT_SEC: ${SEMAPHORE_TIMEOUT_SEC:-30}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       JAVA_OPTS: "-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8"
       LANG: "ru_RU.UTF-8"
       LC_ALL: "ru_RU.UTF-8"
+      TZ: Europe/Moscow
     ports:
       - "8081:8080"
+    volumes:
+      - uploads_data:/usr/local/tomcat/uploads
     restart: unless-stopped
 
 volumes:
   postgres_data:
     name: sql_trainer_postgres_data
+  uploads_data:
+    name: sql_trainer_uploads

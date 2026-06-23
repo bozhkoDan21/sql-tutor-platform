@@ -5,7 +5,7 @@ FROM tomcat:9.0-jdk17
 RUN rm -rf /usr/local/tomcat/webapps/*
 
 # Копируем WAR файл приложения
-COPY target/SQLTutor.war /usr/local/tomcat/webapps/ROOT.war
+COPY target/SQLTrainer.war /usr/local/tomcat/webapps/ROOT.war
 
 # Устанавливаем UTF-8 везде
 ENV LANG ru_RU.UTF-8

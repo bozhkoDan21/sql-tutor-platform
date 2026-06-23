@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 import java.util.*;
+import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -14,16 +15,6 @@ import java.util.concurrent.Semaphore;
 
 /**
  * Выполнение SQL-запросов с EXPLAIN ANALYZE.
- * <p>
- * Поддерживает:
- * <ul>
- *   <li>Одиночные SELECT запросы</li>
- *   <li>Несколько SELECT запросов через ; (выполняется последний)</li>
- *   <li>Кеширование результатов на 30 секунд</li>
- *   <li>Ограничение параллельных запросов через семафор</li>
- *   <li>Опциональное получение EXPLAIN (через параметр needExplain)</li>
- * </ul>
- * </p>
  */
 public class QueryExecutor {
     private static final Logger log = LoggerFactory.getLogger(QueryExecutor.class);
@@ -45,7 +36,6 @@ public class QueryExecutor {
             System.getenv().getOrDefault("SEMAPHORE_TIMEOUT_SEC", "30"));
 
     static {
-        // Периодическая очистка кеша каждую минуту
         scheduler.scheduleAtFixedRate(() -> {
             int sizeBefore = cache.size();
             cache.entrySet().removeIf(entry ->
@@ -56,7 +46,6 @@ public class QueryExecutor {
             }
         }, 1, 1, TimeUnit.MINUTES);
 
-        // Shutdown hook для планировщика
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             scheduler.shutdown();
             try {
@@ -84,6 +73,7 @@ public class QueryExecutor {
         private String error;
         private boolean success;
         private int rowCount;
+        private String signature;  // Добавлено поле для подписи
 
         public List<String> getColumns() { return columns; }
         public void setColumns(List<String> columns) { this.columns = columns; }
@@ -117,17 +107,13 @@ public class QueryExecutor {
         public void setSuccess(boolean success) { this.success = success; }
 
         public int getRowCount() { return rowCount; }
+
+        public String getSignature() { return signature; }
+        public void setSignature(String signature) { this.signature = signature; }
     }
 
     /**
-     * Выполнить запрос от имени студента с ограничением параллельности.
-     * Поддерживает несколько SELECT запросов, разделённых точкой с запятой.
-     * Возвращает результат последнего SELECT запроса.
-     *
-     * @param dbName имя базы данных
-     * @param sql    SQL запрос (может содержать несколько SELECT через ;)
-     * @param needExplain нужно ли получать EXPLAIN
-     * @return результат выполнения
+     * Выполнить запрос от имени студента.
      */
     public static QueryResult executeAsStudent(String dbName, String sql, boolean needExplain) {
         boolean acquired = false;
@@ -145,7 +131,7 @@ public class QueryExecutor {
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return errorResult("Query was interrupted");
+            return errorResult("Запрос был прерван");
         } finally {
             if (acquired) {
                 querySemaphore.release();
@@ -153,18 +139,14 @@ public class QueryExecutor {
         }
     }
 
-    /**
-     * Внутренний метод выполнения запроса (без семафора)
-     */
     private static QueryResult executeAsStudentInternal(String dbName, String sql, boolean needExplain) {
         if (sql == null || sql.trim().isEmpty()) {
-            return errorResult("Query is empty");
+            return errorResult("Запрос пуст");
         }
 
         String sqlTrimmed = sql.trim();
         String[] statements = sqlTrimmed.split(";");
 
-        // Ищем последний SELECT запрос
         String lastSelect = null;
         for (String stmt : statements) {
             String trimmed = stmt.trim();
@@ -174,7 +156,7 @@ public class QueryExecutor {
         }
 
         if (lastSelect == null) {
-            return errorResult("No SELECT query found. Only SELECT queries are allowed.");
+            return errorResult("Не найден SELECT запрос. Разрешены только SELECT запросы.");
         }
 
         if (statements.length > 1 && log.isDebugEnabled()) {
@@ -186,18 +168,27 @@ public class QueryExecutor {
     }
 
     /**
-     * Выполняет один SELECT запрос
+     * Выполняет SELECT-запрос от имени студента.
+     * Применяются ограничения: таймаут, максимальное количество строк из метаданных БД.
+     *
+     * @param dbName имя базы данных
+     * @param sql SQL-запрос
+     * @param needExplain флаг, нужно ли выполнять EXPLAIN ANALYZE
+     * @return результат выполнения запроса
      */
     private static QueryResult executeSingleQuery(String dbName, String sql, boolean needExplain) {
         String sqlLower = sql.toLowerCase();
 
         if (containsDangerousPatterns(sqlLower)) {
             log.warn("Blocked potentially dangerous query: {}", sql);
-            return errorResult("Query contains prohibited patterns (DELETE, UPDATE, DROP, etc.)");
+            return errorResult("Запрос содержит запрещённые команды (DELETE, UPDATE, DROP и т.д.)");
         }
 
-        // Проверка кеша
-        String cacheKey = dbName + ":" + sql + ":explain=" + needExplain;
+        // ПОЛУЧАЕМ maxRows ОДИН РАЗ
+        int maxRows = DatabaseConfig.getMaxRowsForDatabase(dbName);
+
+        // Ключ кэша ТЕПЕРЬ ВКЛЮЧАЕТ maxRows
+        String cacheKey = dbName + ":" + sql + ":explain=" + needExplain + ":maxRows=" + maxRows;
         QueryResult cached = cache.get(cacheKey);
         if (cached != null && (System.currentTimeMillis() - cached.getExecutionTimeMs()) < CACHE_TTL_MS) {
             log.debug("Returning cached result for: {}", cacheKey);
@@ -210,18 +201,21 @@ public class QueryExecutor {
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.STUDENT, dbName);
              Statement stmt = conn.createStatement()) {
 
+            // Устанавливаем таймаут выполнения запроса (из переменных окружения)
             stmt.setQueryTimeout(DatabaseConfig.getQueryTimeout());
-            stmt.setMaxRows(DatabaseConfig.getMaxRows());
 
+            // Устанавливаем лимит строк (maxRows УЖЕ получен выше)
+            stmt.setMaxRows(maxRows);
+            log.debug("Setting max_rows={} for database {}", maxRows, dbName);
+
+            // Если нужно, получаем план выполнения запроса
             if (needExplain) {
                 ExplainResult explainResult = getExplainPlan(stmt, sql);
                 result.setExplainJson(explainResult.json);
                 result.setExplainText(explainResult.text);
-            } else {
-                result.setExplainJson(null);
-                result.setExplainText(null);
             }
 
+            // Выполняем сам запрос
             try (ResultSet rs = stmt.executeQuery(sql)) {
                 ResultSetMetaData meta = rs.getMetaData();
                 int columnCount = meta.getColumnCount();
@@ -247,12 +241,12 @@ public class QueryExecutor {
             long executionTime = System.currentTimeMillis() - startTime;
             result.setExecutionTimeMs(executionTime);
 
-            cache.put(cacheKey, result);
+            // Генерируем подпись для верификации CSV
+            String signature = generateSignature(sql, executionTime, result.getRowCount(), dbName);
+            result.setSignature(signature);
 
-            if (log.isDebugEnabled()) {
-                log.debug("Query executed: {} rows in {} ms on database {} (explain: {})",
-                        result.getRowCount(), executionTime, dbName, needExplain);
-            }
+            // Сохраняем в кэш на 30 секунд
+            cache.put(cacheKey, result);
 
         } catch (SQLException e) {
             String errorMsg = handleSQLError(e);
@@ -263,22 +257,15 @@ public class QueryExecutor {
         return result;
     }
 
-    /**
-     * Вспомогательный класс для хранения обоих форматов EXPLAIN
-     */
     private static class ExplainResult {
         String json;
         String text;
-
         ExplainResult(String json, String text) {
             this.json = json;
             this.text = text;
         }
     }
 
-    /**
-     * Получить план выполнения через EXPLAIN ANALYZE в двух форматах: JSON и TEXT
-     */
     private static ExplainResult getExplainPlan(Statement stmt, String sql) throws SQLException {
         String explainSqlJson = "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + sql;
         String explainSqlText = "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) " + sql;
@@ -313,12 +300,8 @@ public class QueryExecutor {
         return new ExplainResult(jsonPlan, textPlan);
     }
 
-    /**
-     * Проверка на опасные паттерны (защита от DROP, DELETE, UPDATE и т.д.)
-     */
     private static boolean containsDangerousPatterns(String sqlLower) {
         String[] dangerous = Constants.DANGEROUS_SQL_PATTERNS;
-
         for (String pattern : dangerous) {
             if (sqlLower.contains(pattern)) {
                 return true;
@@ -327,22 +310,19 @@ public class QueryExecutor {
         return false;
     }
 
-    /**
-     * Обработка SQL исключений с понятными сообщениями для пользователя
-     */
     private static String handleSQLError(SQLException e) {
         String msg = e.getMessage().toLowerCase();
         if (msg.contains("timeout") || msg.contains("statement timeout")) {
-            return "Query timeout exceeded (" + DatabaseConfig.getQueryTimeout() + " seconds)";
+            return "Превышен таймаут запроса (" + DatabaseConfig.getQueryTimeout() + " секунд)";
         }
         if (msg.contains("permission denied")) {
-            return "Permission denied (only SELECT queries are allowed)";
+            return "Доступ запрещён (разрешены только SELECT запросы)";
         }
         if (msg.contains("syntax error")) {
-            return "SQL syntax error: " + e.getMessage();
+            return "Синтаксическая ошибка SQL: " + e.getMessage();
         }
         if (msg.contains("multiple resultsets")) {
-            return "Multiple queries detected. Only the last SELECT query will be executed.";
+            return "Обнаружено несколько запросов. Будет выполнен только последний SELECT запрос.";
         }
         return e.getMessage();
     }
@@ -353,26 +333,112 @@ public class QueryExecutor {
         return result;
     }
 
-    /**
-     * Очистка кеша (при изменении данных или создании/удалении БД)
-     */
     public static void clearCache() {
         int size = cache.size();
         cache.clear();
         log.info("Query cache cleared. Removed {} entries", size);
     }
 
-    /**
-     * Получить количество активных запросов
-     */
     public static int getActiveQueryCount() {
         return MAX_CONCURRENT_QUERIES - querySemaphore.availablePermits();
     }
 
-    /**
-     * Получить максимальное количество параллельных запросов
-     */
     public static int getMaxConcurrentQueries() {
         return MAX_CONCURRENT_QUERIES;
+    }
+
+    /**
+     * Выполняет запрос от имени преподавателя.
+     */
+    public static QueryResult executeAsTeacher(String dbName, String sql, boolean needExplain) {
+        if (sql == null || sql.trim().isEmpty()) {
+            return errorResult("Запрос пуст");
+        }
+
+        long startTime = System.currentTimeMillis();
+        QueryResult result = new QueryResult();
+
+        try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.TEACHER, dbName);
+             Statement stmt = conn.createStatement()) {
+
+            stmt.setQueryTimeout(30);
+
+            if (needExplain) {
+                ExplainResult explainResult = getExplainPlan(stmt, sql);
+                result.setExplainJson(explainResult.json);
+                result.setExplainText(explainResult.text);
+            }
+
+            boolean isSelect = sql.trim().toLowerCase().startsWith("select");
+
+            if (isSelect) {
+                try (ResultSet rs = stmt.executeQuery(sql)) {
+                    ResultSetMetaData meta = rs.getMetaData();
+                    int columnCount = meta.getColumnCount();
+
+                    List<String> columns = new ArrayList<>();
+                    for (int i = 1; i <= columnCount; i++) {
+                        columns.add(meta.getColumnName(i));
+                    }
+                    result.setColumns(columns);
+
+                    List<Map<String, Object>> rows = new ArrayList<>();
+                    while (rs.next()) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int i = 1; i <= columnCount; i++) {
+                            row.put(meta.getColumnName(i), rs.getObject(i));
+                        }
+                        rows.add(row);
+                    }
+                    result.setRows(rows);
+                    result.setSuccess(true);
+                }
+            } else {
+                stmt.executeUpdate(sql);
+                result.setSuccess(true);
+                result.setColumns(new ArrayList<>());
+                result.setRows(new ArrayList<>());
+            }
+
+            long executionTime = System.currentTimeMillis() - startTime;
+            result.setExecutionTimeMs(executionTime);
+
+            // Генерируем подпись для результата
+            String signature = generateSignature(sql, executionTime, result.getRowCount(), dbName);
+            result.setSignature(signature);
+
+            if (log.isDebugEnabled()) {
+                log.debug("Teacher query executed in {} ms on database {}", executionTime, dbName);
+            }
+
+        } catch (SQLException e) {
+            String errorMsg = handleSQLError(e);
+            log.error("Teacher query failed on database {}: {}", dbName, errorMsg);
+            result.setError(errorMsg);
+        }
+
+        return result;
+    }
+
+    /**
+     * Генерирует подпись для CSV на основе данных запроса
+     */
+    public static String generateSignature(String query, long executionTimeMs, int rowCount, String dbName) {
+        String data = query + executionTimeMs + rowCount + dbName + new Date().toString();
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(data.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString().substring(0, 16);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            log.warn("SHA-256 not available, using simple hash");
+            int hash = data.hashCode();
+            return Integer.toHexString(Math.abs(hash)).substring(0, 8);
+        }
     }
 }

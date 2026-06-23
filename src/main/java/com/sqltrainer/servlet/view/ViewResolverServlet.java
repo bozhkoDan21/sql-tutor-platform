@@ -4,6 +4,7 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 import java.io.IOException;
 
 /**
@@ -11,7 +12,7 @@ import java.io.IOException;
  * Позволяет использовать чистые URL без расширения .jsp.
  * Страницы физически расположены в папке /pages.
  */
-@WebServlet({"/login", "/index", "/profile", "/teacher", "/manageStudents"})
+@WebServlet({"/index", "/teacher", "/login"})
 public class ViewResolverServlet extends HttpServlet {
 
     @Override
@@ -21,29 +22,29 @@ public class ViewResolverServlet extends HttpServlet {
 
         // Маппинг URL -> JSP файл в папке pages
         switch (path) {
-            case "/login":
-                jspPage = "/pages/login.jsp";
-                break;
             case "/index":
                 jspPage = "/pages/index.jsp";
                 break;
-            case "/profile":
-                jspPage = "/pages/profile.jsp";
-                break;
             case "/teacher":
+                // Проверяем аутентификацию перед показом панели преподавателя
+                HttpSession session = req.getSession(false);
+                if (session == null || session.getAttribute("authenticated") == null) {
+                    resp.sendRedirect("/login");
+                    return;
+                }
                 jspPage = "/pages/teacher.jsp";
                 break;
-            case "/manageStudents":
-                jspPage = "/pages/manageStudents.jsp";
+            case "/login":
+                jspPage = "/pages/login.jsp";
                 break;
             default:
-                jspPage = "/pages/login.jsp";
+                jspPage = "/pages/index.jsp";
         }
 
         try {
             req.getRequestDispatcher(jspPage).forward(req, resp);
         } catch (Exception e) {
-            resp.sendError(404, "Page not found: " + jspPage);
+            resp.sendError(404, "Страница не найдена: " + jspPage);
         }
     }
 }

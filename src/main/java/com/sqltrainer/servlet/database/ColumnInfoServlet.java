@@ -28,7 +28,6 @@ public class ColumnInfoServlet extends HttpServlet {
     private static final Logger log = LoggerFactory.getLogger(ColumnInfoServlet.class);
     private final Gson gson = new Gson();
 
-    // Регулярное выражение для валидации идентификаторов SQL
     private static final Pattern VALID_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     @Override
@@ -40,20 +39,20 @@ public class ColumnInfoServlet extends HttpServlet {
         String tableName = req.getParameter("table");
 
         if (dbName == null || dbName.isEmpty() || tableName == null || tableName.isEmpty()) {
-            resp.getWriter().write("{\"error\":\"Database name and table name are required\"}");
+            resp.getWriter().write("{\"error\":\"Не указано имя базы данных или таблицы\"}");
             return;
         }
 
         // Валидация для защиты от SQL-инъекций
         if (!isValidIdentifier(dbName)) {
             log.warn("Invalid database name: {}", dbName);
-            resp.getWriter().write("{\"error\":\"Invalid database name\"}");
+            resp.getWriter().write("{\"error\":\"Недопустимое имя базы данных\"}");
             return;
         }
 
         if (!isValidIdentifier(tableName)) {
             log.warn("Invalid table name: {}", tableName);
-            resp.getWriter().write("{\"error\":\"Invalid table name\"}");
+            resp.getWriter().write("{\"error\":\"Недопустимое имя таблицы\"}");
             return;
         }
 
@@ -73,7 +72,7 @@ public class ColumnInfoServlet extends HttpServlet {
         } catch (SQLException e) {
             log.error("Failed to get columns for {}.{}: {}", dbName, tableName, e.getMessage());
             result.put("success", false);
-            result.put("error", e.getMessage());
+            result.put("error", "Ошибка загрузки колонок: " + e.getMessage());
         }
 
         resp.getWriter().write(gson.toJson(result));

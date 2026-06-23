@@ -34,6 +34,8 @@ body {
     color: var(--text);
     line-height: 1.5;
     min-height: 100vh;
+    overflow-x: hidden;
+    max-width: 100%;
 }
 
 /* Навигация */
@@ -107,11 +109,22 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* Контейнер */
+/* Контейнер и ограничения */
 .container {
     max-width: 1280px;
     margin: 2rem auto;
     padding: 0 1.5rem;
+    width: 100%;
+    overflow-x: hidden;
+}
+
+.right-column {
+    overflow-x: auto;
+    min-width: 0;
+}
+
+.card {
+    overflow-x: auto;
 }
 
 /* Заголовки */
@@ -180,7 +193,6 @@ body {
     gap: 0.75rem;
 }
 
-/* Раскрывающийся блок с анимацией */
 .hint-details {
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -228,7 +240,7 @@ body {
     border-radius: 0 0 var(--radius) var(--radius);
 }
 
-/* Улучшенный блок информации о БД */
+/* Блок информации о БД */
 .db-header {
     display: flex;
     align-items: center;
@@ -269,7 +281,6 @@ body {
     border-bottom: 2px solid var(--border);
 }
 
-/* Заголовок "Таблицы в базе" */
 .tables-header h4 {
     font-size: 0.95rem;
     font-weight: 600;
@@ -278,7 +289,6 @@ body {
     letter-spacing: 0.5px;
 }
 
-/* Счётчик таблиц */
 .tables-count {
     font-size: 0.8rem;
     color: var(--text-light);
@@ -288,7 +298,6 @@ body {
     font-weight: 500;
 }
 
-/* Список таблиц - современные карточки */
 .tables-grid {
     display: flex;
     flex-direction: column;
@@ -298,7 +307,6 @@ body {
     padding-right: 0.25rem;
 }
 
-/* Карточка таблицы */
 .tables-grid li {
     list-style: none;
     display: flex;
@@ -310,12 +318,11 @@ body {
     border: 1px solid var(--border);
     transition: all 0.2s ease;
     cursor: pointer;
-    font-size: 0.95rem;  /* было 0.85rem */
+    font-size: 0.95rem;
     font-family: 'Courier New', monospace;
     color: var(--text);
 }
 
-/* Иконка таблицы */
 .tables-grid li::before {
     font-size: 1rem;
     opacity: 0.6;
@@ -323,7 +330,6 @@ body {
     transition: opacity 0.2s;
 }
 
-/* Hover эффект */
 .tables-grid li:hover {
     background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%);
     border-color: var(--primary);
@@ -355,7 +361,7 @@ body {
     background: var(--primary);
 }
 
-/* ===== БЛОК ПОДКЛЮЧЕНИЯ К БД ===== */
+/* Блок подключения к БД */
 .connection-status {
     display: flex;
     align-items: center;
@@ -409,7 +415,6 @@ body {
     display: inline-block;
 }
 
-/* При наведении показываем полное имя */
 .db-badge:hover {
     max-width: none;
     white-space: normal;
@@ -537,7 +542,6 @@ body {
     display: block;
 }
 
-/* Фиксация заголовка таблицы */
 .results-table {
     width: 100%;
     border-collapse: collapse;
@@ -572,7 +576,6 @@ body {
     white-space: nowrap;
 }
 
-/* Подсветка всей строки при наведении */
 .results-table tr:hover td {
     background-color: var(--primary-light);
     cursor: pointer;
@@ -601,7 +604,6 @@ body {
     margin-top: 4px;
 }
 
-/* Стрелка у подсказки */
 .results-table td:hover::before {
     content: '';
     position: absolute;
@@ -650,7 +652,7 @@ body {
     word-break: break-word;
 }
 
-/* Формы для преподавателя */
+/* Формы для преподавателя (загрузка файлов) */
 .upload-form {
     display: flex;
     flex-direction: column;
@@ -686,7 +688,6 @@ body {
     box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
 }
 
-/* Загрузка файла */
 .file-upload {
     border: 2px dashed var(--border);
     border-radius: var(--radius);
@@ -787,31 +788,6 @@ body {
     box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
 }
 
-/* Мониторинг сессий */
-.sessions-list {
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.sessions-list table {
-    font-size: 0.85rem;
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.sessions-list th {
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    color: #fff;
-    padding: 0.5rem;
-    text-align: left;
-}
-
-.sessions-list td {
-    font-family: inherit;
-    padding: 0.5rem;
-    border-bottom: 1px solid var(--border);
-}
-
 /* CodeMirror редактор SQL */
 .CodeMirror {
     height: auto;
@@ -828,7 +804,6 @@ body {
     box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
 }
 
-/* Подсказки CodeMirror */
 .CodeMirror-hints {
     position: absolute;
     z-index: 10;
@@ -859,136 +834,7 @@ li.CodeMirror-hint-active {
     color: white;
 }
 
-/* Адаптивность */
-@media (max-width: 768px) {
-    .two-columns {
-        grid-template-columns: 1fr;
-    }
-
-    .nav-container {
-        flex-direction: column;
-        height: auto;
-        padding: 1rem;
-        gap: 0.5rem;
-    }
-
-    .nav-right {
-        width: 100%;
-        justify-content: center;
-    }
-
-    .db-manager-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-    }
-
-    .db-manager-item .db-info {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-
-    /* Блок подключения к БД на мобилках - горизонтальный, компактный */
-    .connection-status {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-
-    .status-left {
-        flex-shrink: 0;
-    }
-
-    .status-text {
-        font-size: 0.7rem;
-    }
-
-    /* Бейдж с именем БД на мобилках - компактный */
-    .db-badge {
-        max-width: 160px;
-        font-size: 0.65rem;
-        padding: 0.2rem 0.6rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        flex-shrink: 1;
-    }
-
-    .tables-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .page-title {
-        font-size: 1.5rem;
-    }
-
-    .results-table th,
-    .results-table td {
-        padding: 0.5rem;
-        font-size: 0.7rem;
-    }
-
-    .editor-toolbar {
-        flex-wrap: wrap;
-    }
-
-    /* Горячие клавиши на мобилках */
-    .hotkey-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-
-    .hotkey-key {
-        font-size: 0.75rem;
-    }
-
-    .hotkey-desc {
-        font-size: 0.75rem;
-        text-align: left;
-    }
-}
-
-/* Для очень маленьких экранов (до 480px) */
-@media (max-width: 480px) {
-    .connection-status {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-
-    .db-badge {
-        max-width: 100%;
-        white-space: normal;
-        word-break: break-word;
-        text-align: center;
-        width: auto;
-    }
-
-    .status-text {
-        font-size: 0.7rem;
-    }
-
-    .btn {
-        padding: 0.5rem 1rem;
-        font-size: 0.85rem;
-    }
-}
-
-/* Анимации */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.card {
-    animation: fadeIn 0.3s ease-out;
-}
-
-/* Селектор баз данных */
+/* Селекторы */
 .db-selector {
     margin-bottom: 1.5rem;
 }
@@ -1019,30 +865,7 @@ li.CodeMirror-hint-active {
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
-.db-select option {
-    padding: 0.5rem;
-}
-
-/* Стили для кнопки скачивания */
-.btn-download {
-    background: var(--white);
-    color: var(--success);
-    border: 2px solid var(--success-light);
-    margin-left: auto;
-}
-
-.btn-download:hover {
-    background: var(--success);
-    border-color: var(--success);
-    color: white;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
-}
-
-/* ============================================ */
-/* Горячие клавиши - красивый блок */
-/* ============================================ */
-
+/* Горячие клавиши */
 .hotkeys-grid {
     display: flex;
     flex-direction: column;
@@ -1087,7 +910,7 @@ li.CodeMirror-hint-active {
     line-height: 1.3;
 }
 
-/* ===== ВИЗУАЛИЗАЦИЯ EXPLAIN ===== */
+/* Визуализация EXPLAIN дерева */
 .explain-tree {
     font-family: 'Courier New', monospace;
     font-size: 0.8rem;
@@ -1137,10 +960,10 @@ li.CodeMirror-hint-active {
     font-size: 1rem;
 }
 
-/* Типы узлов */
 .explain-node-type-index {
     border-left-color: #22c55e;
 }
+
 .explain-node-type-index .explain-node-icon {
     color: #22c55e;
 }
@@ -1148,6 +971,7 @@ li.CodeMirror-hint-active {
 .explain-node-type-seq {
     border-left-color: #ef4444;
 }
+
 .explain-node-type-seq .explain-node-icon {
     color: #ef4444;
 }
@@ -1155,6 +979,7 @@ li.CodeMirror-hint-active {
 .explain-node-type-join {
     border-left-color: #f59e0b;
 }
+
 .explain-node-type-join .explain-node-icon {
     color: #f59e0b;
 }
@@ -1162,6 +987,7 @@ li.CodeMirror-hint-active {
 .explain-node-type-aggregate {
     border-left-color: #8b5cf6;
 }
+
 .explain-node-type-aggregate .explain-node-icon {
     color: #8b5cf6;
 }
@@ -1169,6 +995,7 @@ li.CodeMirror-hint-active {
 .explain-node-type-sort {
     border-left-color: #06b6d4;
 }
+
 .explain-node-type-sort .explain-node-icon {
     color: #06b6d4;
 }
@@ -1176,6 +1003,7 @@ li.CodeMirror-hint-active {
 .explain-node-type-limit {
     border-left-color: #84cc16;
 }
+
 .explain-node-type-limit .explain-node-icon {
     color: #84cc16;
 }
@@ -1204,7 +1032,6 @@ li.CodeMirror-hint-active {
     margin-left: 1.5rem;
 }
 
-/* Сводка */
 .explain-summary-stats {
     display: flex;
     flex-wrap: wrap;
@@ -1231,7 +1058,6 @@ li.CodeMirror-hint-active {
     font-weight: 600;
 }
 
-/* Переключатель видов EXPLAIN */
 .explain-toolbar {
     display: flex;
     gap: 0.5rem;
@@ -1310,19 +1136,415 @@ li.CodeMirror-hint-active {
     color: var(--primary);
 }
 
-.container {
-    max-width: 1280px;
-    width: 100%;
-    overflow-x: hidden;
+/* Стиль для плейсхолдера в select */
+select:invalid {
+    color: #9ca3af;
+    font-style: italic;
 }
 
-.right-column {
-    overflow-x: auto;
-    min-width: 0;
+select option {
+    color: #374151;
+    font-style: normal;
+}
+
+/* Убираем серый цвет у выбранных опций */
+select:valid {
+    color: #374151;
+}
+
+/* Сворачиваемая схема */
+.schema-collapsible {
+    margin-bottom: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.schema-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--light);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.schema-header:hover {
+    background: var(--primary-light);
+}
+
+.schema-title {
+    font-weight: 600;
+    color: var(--dark);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.schema-toggle {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    transition: transform 0.2s;
+}
+
+.schema-content {
+    padding: 1rem;
+    display: block;
+    border-top: 1px solid var(--border);
+}
+
+.schema-content.collapsed {
+    display: none;
+}
+
+.schema-image {
+    max-width: 100%;
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+/* Селектор разделителя CSV */
+.separator-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    background: var(--light);
+    border-radius: 2rem;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.separator-select {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 1.5rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    outline: none;
+}
+
+.separator-select:hover {
+    border-color: var(--primary);
+}
+
+.separator-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+}
+
+/* Модальное окно для увеличения изображения */
+.image-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    cursor: pointer;
+}
+
+.image-modal-content {
+    margin: auto;
+    display: block;
+    max-width: 90%;
+    max-height: 90%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.image-modal-content img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
+.image-modal-close {
+    position: absolute;
+    top: 20px;
+    right: 35px;
+    color: #fff;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+    z-index: 1001;
+}
+
+.image-modal-close:hover {
+    color: #bbb;
+}
+
+/* Кнопки управления папками */
+.folder-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--white);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.folder-header:hover {
+    background: var(--primary-light);
+}
+
+.folder-name {
+    font-weight: 600;
+    color: var(--dark);
+    flex: 1;
+}
+
+.folder-actions {
+    display: flex;
+    gap: 0.25rem;
+    margin-right: 0.5rem;
+}
+
+.btn-folder-edit,
+.btn-folder-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+    opacity: 0.6;
+}
+
+.btn-folder-edit:hover {
+    background: var(--primary-light);
+    opacity: 1;
+}
+
+.btn-folder-delete:hover {
+    background: var(--danger-light);
+    opacity: 1;
+}
+
+.btn-move {
+    background: none;
+    border: 2px solid var(--primary-light);
+    color: var(--primary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 2rem;
+    transition: all 0.2s;
+    font-weight: 500;
+    margin-right: 0.5rem;
+}
+
+.btn-move:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+/* Пустая папка */
+.empty-folder {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-light);
+    font-style: italic;
+    font-size: 0.85rem;
+    background: var(--light);
+    border-radius: var(--radius-sm);
+    margin: 0.5rem 0;
+}
+
+/* Стили для открытого состояния папки */
+.folder-databases {
+    padding: 0.5rem 1rem;
+    display: none;
+    flex-direction: column;
+    gap: 0.5rem;
+    border-top: 1px solid var(--border);
+    background: var(--white);
+}
+
+.folder-databases.open {
+    display: flex;
+}
+
+/* Папка с предупреждением (базы без папки) */
+.folder-item.warning-folder .folder-header {
+    background: rgba(245, 158, 11, 0.1);
+    border-left: 4px solid var(--warning);
+}
+
+/* Папка с ошибкой (битые базы) */
+.folder-item.error-folder .folder-header {
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 4px solid var(--danger);
+}
+
+/* Предупреждение для базы без папки */
+.folder-db-warning {
+    background: var(--warning);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    margin-left: 0.5rem;
+    display: inline-block;
+}
+
+/* Ошибка для базы с несуществующей папкой */
+.folder-db-error {
+    background: var(--danger);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    margin-left: 0.5rem;
+    display: inline-block;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .two-columns {
+        grid-template-columns: 1fr;
+    }
+
+    .nav-container {
+        flex-direction: column;
+        height: auto;
+        padding: 1rem;
+        gap: 0.5rem;
+    }
+
+    .nav-right {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .db-manager-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .db-manager-item .db-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .connection-status {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .status-left {
+        flex-shrink: 0;
+    }
+
+    .status-text {
+        font-size: 0.7rem;
+    }
+
+    .db-badge {
+        max-width: 160px;
+        font-size: 0.65rem;
+        padding: 0.2rem 0.6rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex-shrink: 1;
+    }
+
+    .tables-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .page-title {
+        font-size: 1.5rem;
+    }
+
+    .results-table th,
+    .results-table td {
+        padding: 0.5rem;
+        font-size: 0.7rem;
+    }
+
+    .editor-toolbar {
+        flex-wrap: wrap;
+    }
+
+    .hotkey-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .hotkey-key {
+        font-size: 0.75rem;
+    }
+
+    .hotkey-desc {
+        font-size: 0.75rem;
+        text-align: left;
+    }
+
+    .folder-db-warning {
+        display: inline-block;
+        margin-top: 0.25rem;
+        margin-left: 0;
+        }
+
+    .folder-db-item > div {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        }
+}
+
+@media (max-width: 480px) {
+    .connection-status {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .db-badge {
+        max-width: 100%;
+        white-space: normal;
+        word-break: break-word;
+        text-align: center;
+        width: auto;
+    }
+
+    .status-text {
+        font-size: 0.7rem;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+    }
+}
+
+/* Анимации */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .card {
-    overflow-x: auto;
+    animation: fadeIn 0.3s ease-out;
 }
 
 /* Утилиты */

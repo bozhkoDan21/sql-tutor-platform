@@ -1,25 +1,26 @@
 package com.sqltrainer.filter;
 
+import com.sqltrainer.util.CsrfTokenManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.*;
-import javax.servlet.annotation.WebFilter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 import java.io.IOException;
 
 /**
  * Фильтр для ограничения доступа к API преподавателя.
- * Требует наличие роли "teacher" у аутентифицированного пользователя.
+ * Проверяет наличие аутентифицированной сессии преподавателя.
+ * Также генерирует CSRF-токен для защиты от атак.
  */
-@WebFilter({"/api/teacher/*"})
 public class TeacherFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(TeacherFilter.class);
 
     @Override
-    public void init(FilterConfig filterConfig) throws ServletException {
+    public void init(FilterConfig filterConfig) {
         log.info("TeacherFilter initialized");
     }
 
@@ -30,23 +31,31 @@ public class TeacherFilter implements Filter {
         HttpServletRequest req = (HttpServletRequest) request;
         HttpServletResponse resp = (HttpServletResponse) response;
 
-        // Роль устанавливается в JwtAuthFilter
-        String role = (String) req.getAttribute("role");
+        HttpSession session = req.getSession(false);
 
-        if (role == null) {
+        // Проверяем, есть ли сессия и аутентифицирован ли преподаватель
+        if (session == null || session.getAttribute("authenticated") == null) {
             log.warn("Unauthorized access to teacher API: {}", req.getRequestURI());
             resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             resp.setContentType("application/json");
-            resp.getWriter().write("{\"error\":\"Unauthorized\"}");
+            resp.setCharacterEncoding("UTF-8");
+            resp.getWriter().write("{\"error\":\"Неавторизованный доступ. Пожалуйста, войдите как преподаватель.\"}");
             return;
         }
 
-        if (!"teacher".equals(role)) {
-            log.warn("Access denied: teacher role required for {}", req.getRequestURI());
-            resp.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        Boolean isAuthenticated = (Boolean) session.getAttribute("authenticated");
+        if (!isAuthenticated) {
+            log.warn("Invalid teacher session: {}", req.getRequestURI());
+            resp.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             resp.setContentType("application/json");
-            resp.getWriter().write("{\"error\":\"Teacher role required\"}");
+            resp.setCharacterEncoding("UTF-8");
+            resp.getWriter().write("{\"error\":\"Недействительная сессия. Пожалуйста, войдите снова.\"}");
             return;
+        }
+
+        // Генерируем CSRF-токен, если его ещё нет в сессии
+        if (session.getAttribute("csrfToken") == null) {
+            CsrfTokenManager.generateToken(session);
         }
 
         chain.doFilter(request, response);

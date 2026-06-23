@@ -842,6 +842,51 @@ ALTER ROLE students SET idle_in_transaction_session_timeout = '5min';
 ALTER ROLE students CONNECTION LIMIT 20;
 
 -- ============================================
+-- ПРАВА ДЛЯ ПРЕПОДАВАТЕЛЯ
+-- ============================================
+
+\c sql_tutor_university_db;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO teacher_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO teacher_role;
+
+\c archaeology_10m;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO teacher_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO teacher_role;
+
+-- ============================================
+-- РЕГИСТРАЦИЯ ТЕСТОВЫХ БАЗ В МЕТАДАННЫХ
+-- ============================================
+
+\c postgres;
+
+-- Создаём папку для тестовых баз (если ещё не существует)
+INSERT INTO database_folders (name, owner_id)
+SELECT '📚 Тестовые базы (демо)', 'teacher'
+WHERE NOT EXISTS (SELECT 1 FROM database_folders WHERE name = '📚 Тестовые базы (демо)');
+
+-- Регистрируем университетскую базу
+INSERT INTO databases_metadata (db_name, folder_id, display_name, created_by, is_visible)
+SELECT
+    'sql_tutor_university_db',
+    (SELECT id FROM database_folders WHERE name = '📚 Тестовые базы (демо)'),
+    '🎓 Университетская БД (1M студентов, 10M зачислений)',
+    'teacher',
+    true
+WHERE NOT EXISTS (SELECT 1 FROM databases_metadata WHERE db_name = 'sql_tutor_university_db');
+
+-- Регистрируем археологическую базу
+INSERT INTO databases_metadata (db_name, folder_id, display_name, created_by, is_visible)
+SELECT
+    'archaeology_10m',
+    (SELECT id FROM database_folders WHERE name = '📚 Тестовые базы (демо)'),
+    '🏺 Археологическая БД (10M артефактов, 50K находок)',
+    'teacher',
+    true
+WHERE NOT EXISTS (SELECT 1 FROM databases_metadata WHERE db_name = 'archaeology_10m');
+
+SELECT '✅ Тестовые базы зарегистрированы в метаданных, папка "Тестовые базы (демо)" создана' as message;
+
+-- ============================================
 -- ПРОВЕРКА РЕЗУЛЬТАТА
 -- ============================================
 

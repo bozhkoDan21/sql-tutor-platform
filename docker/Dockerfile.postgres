@@ -7,13 +7,24 @@ RUN apt-get update && \
         postgresql-contrib-15 \
         python3 \
         python3-pip \
+        tzdata \
         && rm -rf /var/lib/apt/lists/*
+
+# Установка таймзоны
+ENV TZ=Europe/Moscow
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Создаем расширения при старте
 RUN echo "CREATE EXTENSION IF NOT EXISTS plpython3u;" > /docker-entrypoint-initdb.d/01-init-extensions.sql
 RUN echo "CREATE EXTENSION IF NOT EXISTS pgcrypto;" >> /docker-entrypoint-initdb.d/01-init-extensions.sql
 
-# Копируем основной скрипт
-COPY scripts/db/setup_database.sql /docker-entrypoint-initdb.d/02-setup.sql
+# Устанавливаем таймзону в PostgreSQL при инициализации
+RUN echo "ALTER SYSTEM SET timezone = 'Europe/Moscow';" >> /docker-entrypoint-initdb.d/02-init-timezone.sql
+
+# Копируем скрипт для создания метаданных (папки, настройки БД)
+COPY scripts/db/setup_metadata.sql /docker-entrypoint-initdb.d/03-setup-metadata.sql
+
+# Копируем основной скрипт учебных баз
+COPY scripts/db/setup_database.sql /docker-entrypoint-initdb.d/04-setup-database.sql
 
 EXPOSE 5432

@@ -35,18 +35,20 @@ if not exist .env (
         echo DB_STUDENT_USER=students
         echo DB_STUDENT_PASSWORD=student_pass
         echo.
-        echo # Security
-        echo JWT_SECRET=sql-trainer-super-secret-key-2024-must-be-at-least-256-bits-long
+        echo # Teacher authentication
+        echo TEACHER_PASSWORD=teacher123
         echo.
         echo # Limits
-        echo QUERY_TIMEOUT_SEC=3
+        echo QUERY_TIMEOUT_SEC=30
         echo MAX_ROWS=1000
         echo CONNECTION_TIMEOUT_MS=5000
         echo.
-        echo # JWT Settings
-        echo JWT_ACCESS_TOKEN_EXPIRY_HOURS=1
-        echo JWT_REFRESH_TOKEN_EXPIRY_DAYS=7
-        echo JWT_INACTIVE_TIMEOUT_HOURS=3
+        echo # Concurrency limits
+        echo MAX_CONCURRENT_QUERIES=10
+        echo SEMAPHORE_TIMEOUT_SEC=30
+        echo.
+        echo # Logging
+        echo LOG_LEVEL=INFO
     ) > .env
     echo [OK] Файл .env создан
     echo.
@@ -88,13 +90,12 @@ if not exist docker-compose.yml (
 REM Спрашиваем про удаление данных
 echo [2/5] Подготовка контейнеров...
 echo.
-echo ВНИМАНИЕ! Генерация учебных баз данных может занять 30-40 минут.
-echo.
 set REMOVE_DATA=N
-set /p REMOVE_DATA="Удалить ВСЕ данные БД и пересоздать учебные базы? (Y/N - по умолчанию N): "
+set /p REMOVE_DATA="Удалить ВСЕ данные БД и начать с чистого листа? (Y/N - по умолчанию N): "
 if /i "!REMOVE_DATA!"=="Y" (
     echo [INFO] Удаление данных БД...
     docker-compose down -v 2>nul
+    docker volume rm sql_trainer_postgres_data sql_trainer_uploads 2>nul
     echo [OK] Контейнеры остановлены, данные удалены
     set NEED_SETUP=Y
 ) else (
@@ -119,33 +120,45 @@ echo.
 
 REM Ожидание готовности PostgreSQL
 echo [4/5] Ожидание готовности PostgreSQL...
-if /i "!REMOVE_DATA!"=="Y" (
-    echo [INFO] PostgreSQL пересоздаётся, ждём 10 секунд...
-    timeout /t 10 /nobreak >nul
-) else (
-    timeout /t 5 /nobreak >nul
-)
+echo [INFO] Ожидание 30 секунд для инициализации PostgreSQL...
+timeout /t 30 /nobreak >nul
 
-REM Выполнение скрипта авторизации
-echo [5/5] Настройка таблиц авторизации...
-docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_auth.sql 2>nul
+REM Выполнение скрипта настройки метаданных (папки, права доступа, сессии)
+echo [5/5] Настройка метаданных баз данных...
+docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_metadata.sql 2>nul
 if !errorlevel! neq 0 (
-    echo [WARN] Не удалось выполнить setup_auth.sql
+    echo [WARN] Не удалось выполнить setup_metadata.sql
 ) else (
-    echo [OK] Таблицы авторизации созданы
+    echo [OK] Таблицы метаданных созданы
 )
 
-REM Выполнение скрипта учебных баз (только если данные были удалены)
+REM Спрашиваем про загрузку тестовых данных
 if /i "!REMOVE_DATA!"=="Y" (
     echo.
-    echo [INFO] Запуск генерации учебных баз данных (может занять 30-40 минут)...
-    echo [INFO] Следите за логами PostgreSQL: docker logs -f sql_trainer_postgres
+    echo ========================================
+    echo    ТЕСТОВЫЕ ДАННЫЕ
+    echo ========================================
     echo.
-    docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_database.sql 2>nul
-    if !errorlevel! neq 0 (
-        echo [WARN] Не удалось выполнить setup_database.sql
+    echo Тестовые базы данных содержат 1 млн студентов и 10 млн артефактов.
+    echo Генерация может занять 30-40 минут и требует ~2 ГБ дискового пространства.
+    echo.
+    set LOAD_TEST_DATA=N
+    set /p LOAD_TEST_DATA="Загрузить тестовые учебные базы данных? (Y/N - по умолчанию N): "
+
+    if /i "!LOAD_TEST_DATA!"=="Y" (
+        echo.
+        echo [INFO] Запуск генерации тестовых учебных баз данных...
+        echo [INFO] Это может занять 30-40 минут. Следите за логами: docker logs -f sql_trainer_postgres
+        echo.
+        docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_database.sql 2>nul
+        if !errorlevel! neq 0 (
+            echo [WARN] Не удалось выполнить setup_database.sql
+        ) else (
+            echo [OK] Тестовые учебные базы данных созданы
+        )
     ) else (
-        echo [OK] Учебные базы данных созданы
+        echo [SKIP] Тестовые учебные базы данных НЕ загружены
+        echo [INFO] При необходимости вы сможете загрузить их позже через панель преподавателя
     )
 ) else (
     echo [SKIP] Учебные базы данных не пересозданы (данные сохранены)
@@ -162,8 +175,8 @@ echo    РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО
 echo ========================================
 echo.
 echo [i] Приложение: http://localhost:8081
-echo [i] Страница входа: http://localhost:8081/login.jsp
-echo [i] Логин преподавателя: teacher
+echo [i] Страница тренажёра: http://localhost:8081/index
+echo [i] Панель преподавателя: http://localhost:8081/teacher
 echo [i] Пароль преподавателя: teacher123
 echo.
 
