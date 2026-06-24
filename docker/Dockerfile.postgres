@@ -24,7 +24,8 @@ RUN echo "ALTER SYSTEM SET timezone = 'Europe/Moscow';" >> /docker-entrypoint-in
 # Копируем скрипт для создания метаданных (папки, настройки БД)
 COPY scripts/db/setup_metadata.sql /docker-entrypoint-initdb.d/03-setup-metadata.sql
 
-# Копируем основной скрипт учебных баз
-COPY scripts/db/setup_database.sql /docker-entrypoint-initdb.d/04-setup-database.sql
+# Копируем скрипт учебных баз ТОЛЬКО если переменная LOAD_TEST_DATA=true
+# По умолчанию НЕ копируем, чтобы избежать автоматической генерации
+# COPY scripts/db/setup_database.sql /docker-entrypoint-initdb.d/04-setup-database.sql
 
 EXPOSE 5432
