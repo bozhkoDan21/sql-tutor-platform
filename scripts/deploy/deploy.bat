@@ -35,9 +35,6 @@ if not exist .env (
         echo DB_STUDENT_USER=students
         echo DB_STUDENT_PASSWORD=student_pass
         echo.
-        echo # Teacher authentication
-        echo TEACHER_PASSWORD=teacher123
-        echo.
         echo # Limits
         echo QUERY_TIMEOUT_SEC=30
         echo MAX_ROWS=1000
@@ -123,45 +120,13 @@ echo [4/5] Ожидание готовности PostgreSQL...
 echo [INFO] Ожидание 30 секунд для инициализации PostgreSQL...
 timeout /t 30 /nobreak >nul
 
-REM Выполнение скрипта настройки метаданных (папки, права доступа, сессии)
+REM Выполнение скрипта настройки метаданных
 echo [5/5] Настройка метаданных баз данных...
 docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_metadata.sql 2>nul
 if !errorlevel! neq 0 (
     echo [WARN] Не удалось выполнить setup_metadata.sql
 ) else (
     echo [OK] Таблицы метаданных созданы
-)
-
-REM Спрашиваем про загрузку тестовых данных
-if /i "!REMOVE_DATA!"=="Y" (
-    echo.
-    echo ========================================
-    echo    ТЕСТОВЫЕ ДАННЫЕ
-    echo ========================================
-    echo.
-    echo Тестовые базы данных содержат 1 млн студентов и 10 млн артефактов.
-    echo Генерация может занять 30-40 минут и требует ~2 ГБ дискового пространства.
-    echo.
-    set LOAD_TEST_DATA=N
-    set /p LOAD_TEST_DATA="Загрузить тестовые учебные базы данных? (Y/N - по умолчанию N): "
-
-    if /i "!LOAD_TEST_DATA!"=="Y" (
-        echo.
-        echo [INFO] Запуск генерации тестовых учебных баз данных...
-        echo [INFO] Это может занять 30-40 минут. Следите за логами: docker logs -f sql_trainer_postgres
-        echo.
-        docker exec -i sql_trainer_postgres psql -U postgres < ..\scripts\db\setup_database.sql 2>nul
-        if !errorlevel! neq 0 (
-            echo [WARN] Не удалось выполнить setup_database.sql
-        ) else (
-            echo [OK] Тестовые учебные базы данных созданы
-        )
-    ) else (
-        echo [SKIP] Тестовые учебные базы данных НЕ загружены
-        echo [INFO] При необходимости вы сможете загрузить их позже через панель преподавателя
-    )
-) else (
-    echo [SKIP] Учебные базы данных не пересозданы (данные сохранены)
 )
 
 echo.

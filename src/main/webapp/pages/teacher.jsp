@@ -439,6 +439,26 @@
         .quick-folder-form .btn {
             margin-left: 0.5rem;
         }
+
+        /* Стили для смены пароля */
+        .password-result {
+            padding: 0.75rem;
+            border-radius: var(--radius);
+            margin-bottom: 1rem;
+            display: none;
+        }
+        .password-result.success {
+            display: block;
+            background: var(--success-light);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+        .password-result.error {
+            display: block;
+            background: var(--danger-light);
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
     </style>
 </head>
 <body>
@@ -662,6 +682,37 @@
                     </div>
                 </form>
                 <div id="moodleResult" style="margin-top: 1rem; display: none;"></div>
+            </div>
+
+            <!-- ============================================ -->
+            <!-- НОВЫЙ БЛОК: СМЕНА ПАРОЛЯ ПРЕПОДАВАТЕЛЯ       -->
+            <!-- ============================================ -->
+            <div class="card">
+                <h3 class="card-title">🔑 Сменить пароль</h3>
+                <form id="changePasswordForm" class="upload-form" autocomplete="off">
+                    <input type="hidden" name="csrf_token" id="csrfTokenFieldPassword" value="">
+
+                    <div id="passwordResult" class="password-result"></div>
+
+                    <div class="form-group">
+                        <label class="form-label">Текущий пароль</label>
+                        <input type="password" id="oldPassword" class="form-input" placeholder="Введите текущий пароль" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Новый пароль (минимум 6 символов)</label>
+                        <input type="password" id="newPassword" class="form-input" placeholder="Введите новый пароль" required minlength="6">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Подтверждение нового пароля</label>
+                        <input type="password" id="confirmPassword" class="form-input" placeholder="Подтвердите новый пароль" required>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Сменить пароль</button>
+                    </div>
+                </form>
             </div>
 
             <div class="card">

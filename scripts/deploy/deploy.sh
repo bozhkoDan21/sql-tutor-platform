@@ -40,9 +40,6 @@ DB_TEACHER_PASSWORD=teacher_pass
 DB_STUDENT_USER=students
 DB_STUDENT_PASSWORD=student_pass
 
-# Teacher authentication
-TEACHER_PASSWORD=teacher123
-
 # Limits
 QUERY_TIMEOUT_SEC=30
 MAX_ROWS=1000
@@ -132,37 +129,6 @@ if [ $? -ne 0 ]; then
     echo -e "${YELLOW}[WARN] Не удалось выполнить setup_metadata.sql${NC}"
 else
     echo -e "${GREEN}[OK] Таблицы метаданных созданы${NC}"
-fi
-
-# Спрашиваем про загрузку тестовых данных (только если данные были удалены)
-if [ "$REMOVE_DATA" = true ]; then
-    echo ""
-    echo "========================================"
-    echo "   ТЕСТОВЫЕ ДАННЫЕ"
-    echo "========================================"
-    echo ""
-    echo -e "${YELLOW}Тестовые базы данных содержат 1 млн студентов и 10 млн артефактов.${NC}"
-    echo -e "${YELLOW}Генерация может занять 30-40 минут и требует ~2 ГБ дискового пространства.${NC}"
-    echo ""
-    read -p "Загрузить тестовые учебные базы данных? (y/N): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo ""
-        echo -e "${YELLOW}[INFO] Запуск генерации тестовых учебных баз данных...${NC}"
-        echo -e "${YELLOW}[INFO] Это может занять 30-40 минут. Следите за логами: docker logs -f sql_trainer_postgres${NC}"
-        echo ""
-        docker exec -i sql_trainer_postgres psql -U postgres < ../scripts/db/setup_database.sql 2>/dev/null
-        if [ $? -ne 0 ]; then
-            echo -e "${YELLOW}[WARN] Не удалось выполнить setup_database.sql${NC}"
-        else
-            echo -e "${GREEN}[OK] Тестовые учебные базы данных созданы${NC}"
-        fi
-    else
-        echo -e "${BLUE}[SKIP] Тестовые учебные базы данных НЕ загружены${NC}"
-        echo -e "${BLUE}[INFO] При необходимости вы сможете загрузить их позже через панель преподавателя${NC}"
-    fi
-else
-    echo -e "${BLUE}[SKIP] Учебные базы данных не пересозданы (данные сохранены)${NC}"
 fi
 
 echo ""

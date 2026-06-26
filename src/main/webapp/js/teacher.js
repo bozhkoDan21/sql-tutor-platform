@@ -34,6 +34,9 @@ async function loadCsrfToken() {
             document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
                 input.value = csrfToken;
             });
+            // Добавляем для формы смены пароля
+            const csrfField = document.getElementById('csrfTokenFieldPassword');
+            if (csrfField) csrfField.value = csrfToken;
             return true;
         }
     } catch (error) {
@@ -1084,6 +1087,97 @@ if (uploadForm) {
         xhr.open('POST', '/api/teacher', true);
         xhr.send(formData);
     });
+}
+
+// ============================================
+// СМЕНА ПАРЛЯ ПРЕПОДАВАТЕЛЯ
+// ============================================
+
+const changePasswordForm = document.getElementById('changePasswordForm');
+if (changePasswordForm) {
+    changePasswordForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const oldPassword = document.getElementById('oldPassword');
+        const newPassword = document.getElementById('newPassword');
+        const confirmPassword = document.getElementById('confirmPassword');
+        const resultDiv = document.getElementById('passwordResult');
+
+        // Проверяем, что все поля существуют
+        if (!oldPassword || !newPassword || !confirmPassword) {
+            console.error('One or more form fields not found');
+            alert('Ошибка: не найдены поля формы');
+            return;
+        }
+
+        // Очищаем предыдущие сообщения
+        if (resultDiv) {
+            resultDiv.style.display = 'none';
+            resultDiv.className = 'password-result';
+        }
+
+        const oldPwd = oldPassword.value;
+        const newPwd = newPassword.value;
+        const confirmPwd = confirmPassword.value;
+
+        // Валидация на клиенте
+        if (newPwd.length < 6) {
+            showPasswordResult('Новый пароль должен содержать минимум 6 символов', 'error');
+            return;
+        }
+
+        if (newPwd !== confirmPwd) {
+            showPasswordResult('Пароли не совпадают', 'error');
+            return;
+        }
+
+        // Отправляем запрос
+        try {
+            const response = await fetch('/api/teacher/change-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken || ''
+                },
+                body: JSON.stringify({
+                    oldPassword: oldPwd,
+                    newPassword: newPwd,
+                    confirmPassword: confirmPwd
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showPasswordResult('✅ ' + data.message, 'success');
+                // Очищаем поля
+                oldPassword.value = '';
+                newPassword.value = '';
+                confirmPassword.value = '';
+            } else {
+                showPasswordResult('❌ ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showPasswordResult('❌ Ошибка соединения: ' + error.message, 'error');
+        }
+    });
+}
+
+/**
+ * Показывает результат смены пароля
+ */
+function showPasswordResult(message, type) {
+    const resultDiv = document.getElementById('passwordResult');
+    if (!resultDiv) {
+        // Если элемента нет, показываем alert
+        alert(message);
+        return;
+    }
+
+    resultDiv.textContent = message;
+    resultDiv.style.display = 'block';
+    resultDiv.className = 'password-result ' + type;
 }
 
 // ============================================

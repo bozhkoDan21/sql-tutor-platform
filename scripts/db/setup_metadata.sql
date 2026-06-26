@@ -30,6 +30,7 @@ $$;
 DROP TABLE IF EXISTS active_sessions CASCADE;
 DROP TABLE IF EXISTS databases_metadata CASCADE;
 DROP TABLE IF EXISTS database_folders CASCADE;
+DROP TABLE IF EXISTS teacher_settings CASCADE;
 
 -- ============================================
 -- ТАБЛИЦА ПАПОК
@@ -63,6 +64,26 @@ CREATE TABLE databases_metadata (
 );
 
 -- ============================================
+-- ТАБЛИЦА НАСТРОЕК ПРЕПОДАВАТЕЛЯ
+-- ============================================
+
+CREATE TABLE teacher_settings (
+    id SERIAL PRIMARY KEY,
+    setting_key VARCHAR(100) NOT NULL UNIQUE,
+    setting_value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- ДОБАВЛЯЕМ ХЕШ ПАРОЛЯ ПРЕПОДАВАТЕЛЯ
+-- ============================================
+
+-- Хеш для пароля "teacher123"
+INSERT INTO teacher_settings (setting_key, setting_value)
+VALUES ('password', '$2a$10$PG7vidujC0iL05PyGiOzw.rxCoVHdZWZyWzmOG4dpBRJ8knP6GZMa')
+ON CONFLICT (setting_key) DO NOTHING;
+
+-- ============================================
 -- ИНДЕКСЫ
 -- ============================================
 
@@ -71,6 +92,7 @@ CREATE INDEX idx_metadata_folder ON databases_metadata(folder_id);
 CREATE INDEX idx_metadata_visibility ON databases_metadata(is_visible);
 CREATE INDEX idx_metadata_dates ON databases_metadata(access_start, access_end);
 CREATE INDEX idx_metadata_owner ON databases_metadata(created_by);
+CREATE INDEX idx_teacher_settings_key ON teacher_settings(setting_key);
 
 -- ============================================
 -- ТРИГГЕРЫ ДЛЯ AUTO-UPDATE
@@ -94,12 +116,18 @@ CREATE TRIGGER trigger_update_metadata_updated_at
     FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER trigger_update_teacher_settings_updated_at
+    BEFORE UPDATE ON teacher_settings
+    FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================
 -- ПРАВА ДОСТУПА
 -- ============================================
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON database_folders TO teacher_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON databases_metadata TO teacher_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON teacher_settings TO teacher_role;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO teacher_role;
 
 SELECT 'Таблицы метаданных баз данных созданы' as message;

@@ -38,7 +38,6 @@ services:
       DB_TEACHER_PASSWORD: ${DB_TEACHER_PASSWORD:-teacher_pass}
       DB_STUDENT_USER: ${DB_STUDENT_USER:-students}
       DB_STUDENT_PASSWORD: ${DB_STUDENT_PASSWORD:-student_pass}
-      TEACHER_PASSWORD: ${TEACHER_PASSWORD:-teacher123}
       QUERY_TIMEOUT_SEC: ${QUERY_TIMEOUT_SEC:-30}
       MAX_ROWS: ${MAX_ROWS:-1000}
       CONNECTION_TIMEOUT_MS: ${CONNECTION_TIMEOUT_MS:-5000}
@@ -53,6 +52,7 @@ services:
       - "8081:8080"
     volumes:
       - uploads_data:/usr/local/tomcat/uploads
+      - ../.env:/usr/local/tomcat/.env
     restart: unless-stopped
 
 volumes:
