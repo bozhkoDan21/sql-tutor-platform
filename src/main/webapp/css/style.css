@@ -1409,6 +1409,25 @@ select:valid {
     display: inline-block;
 }
 
+/* Сообщения результатов */
+.success-message {
+    background: var(--success-light);
+    color: var(--success);
+    border: 1px solid var(--success);
+    padding: 0.75rem;
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+}
+
+.error-message {
+    background: var(--danger-light);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    padding: 0.75rem;
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
     .two-columns {

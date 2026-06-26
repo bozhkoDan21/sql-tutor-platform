@@ -70,7 +70,7 @@
       <version>3.14.0</version>
     </dependency>
 
-    <!-- BCrypt для хеширования паролей баз данных -->
+    <!-- BCrypt для хеширования паролей -->
     <dependency>
       <groupId>org.mindrot</groupId>
       <artifactId>jbcrypt</artifactId>
@@ -82,6 +82,7 @@
   <build>
     <finalName>SQLTrainer</finalName>
     <plugins>
+      <!-- WAR плагин -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-war-plugin</artifactId>
@@ -90,6 +91,8 @@
           <failOnMissingWebXml>false</failOnMissingWebXml>
         </configuration>
       </plugin>
+
+      <!-- Tomcat плагин для локального запуска -->
       <plugin>
         <groupId>org.apache.tomcat.maven</groupId>
         <artifactId>tomcat7-maven-plugin</artifactId>
@@ -101,6 +104,17 @@
           <useTestClasspath>false</useTestClasspath>
         </configuration>
       </plugin>
+
+      <!-- Exec плагин для запуска утилит (например, генерация BCrypt-хеша) -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.6.3</version>
+        <configuration>
+          <mainClass>com.sqltrainer.util.PasswordHashGenerator</mainClass>
+        </configuration>
+      </plugin>
+
     </plugins>
   </build>
 </project>
