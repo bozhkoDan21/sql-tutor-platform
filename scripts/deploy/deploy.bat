@@ -139,10 +139,12 @@ echo ========================================
 echo    РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО
 echo ========================================
 echo.
-echo [i] Приложение: http://localhost:8081
-echo [i] Страница тренажёра: http://localhost:8081/index
-echo [i] Панель преподавателя: http://localhost:8081/teacher
+echo [i] Приложение (HTTP): http://localhost:8081
+echo [i] Приложение (HTTPS): https://localhost:8443
+echo [i] Страница тренажёра: https://localhost:8443/index
+echo [i] Панель преподавателя: https://localhost:8443/teacher
 echo [i] Пароль преподавателя: teacher123
+echo [i] ВНИМАНИЕ: HTTPS использует самоподписанный сертификат. Браузер покажет предупреждение — нажмите «Продолжить» или «Принять риск».
 echo.
 
 pause

@@ -50,9 +50,10 @@ services:
       TZ: Europe/Moscow
     ports:
       - "8081:8080"
+      - "8443:8443"
     volumes:
       - uploads_data:/usr/local/tomcat/uploads
-      - ../.env:/usr/local/tomcat/.env
+      - ./keystore.jks:/usr/local/tomcat/conf/keystore.jks:ro
     restart: unless-stopped
 
 volumes:
