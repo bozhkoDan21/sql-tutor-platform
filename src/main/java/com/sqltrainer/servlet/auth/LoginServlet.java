@@ -45,11 +45,34 @@ public class LoginServlet extends HttpServlet {
         }
 
         try (Connection conn = DatabaseConfig.getConnection(DatabaseConfig.Role.ADMIN, null)) {
-            String storedHash = getTeacherPasswordHash(conn);
+            String sql = "SELECT username, password_hash, full_name FROM teacher_settings";
+            try (PreparedStatement stmt = conn.prepareStatement(sql);
+                 ResultSet rs = stmt.executeQuery()) {
 
-            if (storedHash != null && BCrypt.checkpw(password, storedHash)) {
+                String foundUsername = null;
+                String foundFullName = null;
+
+                while (rs.next()) {
+                    String storedHash = rs.getString("password_hash");
+                    if (BCrypt.checkpw(password, storedHash)) {
+                        foundUsername = rs.getString("username");
+                        foundFullName = rs.getString("full_name");
+                        break;
+                    }
+                }
+
+                if (foundUsername == null) {
+                    response.put("success", false);
+                    response.put("error", "Неверный пароль");
+                    log.warn("Failed login attempt");
+                    resp.getWriter().write(gson.toJson(response));
+                    return;
+                }
+
                 HttpSession session = req.getSession(true);
                 session.setAttribute("authenticated", true);
+                session.setAttribute("username", foundUsername);
+                session.setAttribute("fullName", foundFullName != null ? foundFullName : foundUsername);
                 session.setMaxInactiveInterval(3600);
 
                 String csrfToken = CsrfTokenManager.generateToken(session);
@@ -57,13 +80,10 @@ public class LoginServlet extends HttpServlet {
                 response.put("success", true);
                 response.put("message", "Вход выполнен успешно");
                 response.put("csrfToken", csrfToken);
-                log.info("Teacher logged in successfully");
-            } else {
-                response.put("success", false);
-                response.put("error", "Неверный пароль");
-                log.warn("Failed login attempt");
+                response.put("username", foundUsername);
+                response.put("fullName", foundFullName != null ? foundFullName : foundUsername);
+                log.info("Teacher logged in: {}", foundUsername);
             }
-
         } catch (SQLException e) {
             log.error("Database error during login", e);
             response.put("success", false);
@@ -80,32 +100,16 @@ public class LoginServlet extends HttpServlet {
 
         HttpSession session = req.getSession(false);
         Map<String, Object> response = new HashMap<>();
-        response.put("authenticated", session != null && session.getAttribute("authenticated") != null);
+
+        if (session != null && session.getAttribute("authenticated") != null) {
+            response.put("authenticated", true);
+            response.put("username", session.getAttribute("username"));
+            response.put("fullName", session.getAttribute("fullName"));
+        } else {
+            response.put("authenticated", false);
+        }
         response.put("success", true);
 
         resp.getWriter().write(gson.toJson(response));
-    }
-
-    private String getTeacherPasswordHash(Connection conn) throws SQLException {
-        String sql = "SELECT setting_value FROM teacher_settings WHERE setting_key = 'password'";
-        try (PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-            if (rs.next()) {
-                return rs.getString("setting_value");
-            }
-            // Создаём хеш для пароля по умолчанию
-            createDefaultPasswordHash(conn);
-            return BCrypt.hashpw("teacher123", BCrypt.gensalt());
-        }
-    }
-
-    private void createDefaultPasswordHash(Connection conn) throws SQLException {
-        String hashedPassword = BCrypt.hashpw("teacher123", BCrypt.gensalt());
-        String sql = "INSERT INTO teacher_settings (setting_key, setting_value) VALUES ('password', ?)";
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, hashedPassword);
-            stmt.executeUpdate();
-            log.info("Created default teacher password hash");
-        }
     }
 }

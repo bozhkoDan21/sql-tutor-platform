@@ -64,24 +64,29 @@ CREATE TABLE databases_metadata (
 );
 
 -- ============================================
--- ТАБЛИЦА НАСТРОЕК ПРЕПОДАВАТЕЛЯ
+-- ТАБЛИЦА ПРЕПОДАВАТЕЛЕЙ (исправленная)
 -- ============================================
 
 CREATE TABLE teacher_settings (
     id SERIAL PRIMARY KEY,
-    setting_key VARCHAR(100) NOT NULL UNIQUE,
-    setting_value TEXT NOT NULL,
+    username VARCHAR(50) NOT NULL UNIQUE,           -- логин преподавателя
+    password_hash VARCHAR(255) NOT NULL,            -- BCrypt-хеш пароля
+    full_name VARCHAR(255),                         -- ФИО преподавателя
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================
--- ДОБАВЛЯЕМ ХЕШ ПАРОЛЯ ПРЕПОДАВАТЕЛЯ
+-- ДОБАВЛЯЕМ ПЕРВОГО ПРЕПОДАВАТЕЛЯ (ПО УМОЛЧАНИЮ)
 -- ============================================
 
 -- Хеш для пароля "teacher123"
-INSERT INTO teacher_settings (setting_key, setting_value)
-VALUES ('password', '$2a$10$PG7vidujC0iL05PyGiOzw.rxCoVHdZWZyWzmOG4dpBRJ8knP6GZMa')
-ON CONFLICT (setting_key) DO NOTHING;
+INSERT INTO teacher_settings (username, password_hash, full_name)
+VALUES (
+        'teacher',
+        '$2a$10$PG7vidujC0iL05PyGiOzw.rxCoVHdZWZyWzmOG4dpBRJ8knP6GZMa',
+        'Преподаватель'
+       ) ON CONFLICT (username) DO NOTHING;
 
 -- ============================================
 -- ИНДЕКСЫ
@@ -92,7 +97,7 @@ CREATE INDEX idx_metadata_folder ON databases_metadata(folder_id);
 CREATE INDEX idx_metadata_visibility ON databases_metadata(is_visible);
 CREATE INDEX idx_metadata_dates ON databases_metadata(access_start, access_end);
 CREATE INDEX idx_metadata_owner ON databases_metadata(created_by);
-CREATE INDEX idx_teacher_settings_key ON teacher_settings(setting_key);
+CREATE INDEX idx_teacher_username ON teacher_settings(username);
 
 -- ============================================
 -- ТРИГГЕРЫ ДЛЯ AUTO-UPDATE

@@ -459,6 +459,34 @@
             color: var(--danger);
             border: 1px solid var(--danger);
         }
+
+        /* Стили для отображения логина */
+        .teacher-info {
+            background: linear-gradient(135deg, var(--primary-light) 0%, #f0f3ff 100%);
+            border-radius: var(--radius);
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .teacher-info .label {
+            font-weight: 600;
+            color: var(--text);
+            font-size: 0.9rem;
+        }
+        .teacher-info .value {
+            font-weight: 700;
+            color: var(--primary);
+            font-size: 1.1rem;
+            font-family: 'Courier New', monospace;
+            background: white;
+            padding: 0.2rem 0.8rem;
+            border-radius: 1rem;
+            border: 1px solid var(--primary-light);
+        }
     </style>
 </head>
 <body>
@@ -547,6 +575,14 @@
 
     <main class="container">
         <h2 class="page-title">Панель управления</h2>
+
+        <!-- ============================================ -->
+        <!-- ИНФОРМАЦИЯ О ТЕКУЩЕМ ПРЕПОДАВАТЕЛЕ           -->
+        <!-- ============================================ -->
+        <div class="teacher-info" id="teacherInfo">
+            <span class="label">👤 Вы вошли как:</span>
+            <span class="value" id="teacherLogin">загрузка...</span>
+        </div>
 
         <div id="tab-databases" class="tab-content active">
 
@@ -700,13 +736,19 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Новый пароль (минимум 6 символов)</label>
-                        <input type="password" id="newPassword" class="form-input" placeholder="Введите новый пароль" required minlength="6">
+                        <label class="form-label">Новый пароль</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="newPassword" class="form-input" placeholder="Нажмите 'Сгенерировать'" required minlength="6" style="flex: 1;" readonly>
+                            <button type="button" id="generatePasswordBtn" class="btn btn-secondary" style="white-space: nowrap;">🎲 Сгенерировать</button>
+                        </div>
+                        <div style="font-size: 0.7rem; color: var(--text-light); margin-top: 0.25rem;">
+                            Пароль генерируется автоматически. Нажмите "Сгенерировать" для создания нового пароля.
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Подтверждение нового пароля</label>
-                        <input type="password" id="confirmPassword" class="form-input" placeholder="Подтвердите новый пароль" required>
+                        <input type="text" id="confirmPassword" class="form-input" placeholder="Подтвердите новый пароль" required readonly>
                     </div>
 
                     <div class="form-actions">

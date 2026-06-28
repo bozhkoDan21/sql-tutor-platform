@@ -1164,6 +1164,74 @@ if (changePasswordForm) {
     });
 }
 
+// ============================================
+// ГЕНЕРАЦИЯ СЛУЧАЙНОГО ПАРОЛЯ
+// ============================================
+
+// Кнопка генерации пароля
+const generateBtn = document.getElementById('generatePasswordBtn');
+if (generateBtn) {
+    generateBtn.addEventListener('click', async function() {
+        try {
+            const response = await fetch('/api/teacher/change-password', {
+                method: 'GET',
+                headers: {
+                    'X-CSRF-Token': csrfToken || ''
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                const newPassword = document.getElementById('newPassword');
+                const confirmPassword = document.getElementById('confirmPassword');
+                newPassword.value = data.password;
+                confirmPassword.value = data.password;
+
+                // Подсветка полей
+                newPassword.style.borderColor = 'var(--success)';
+                confirmPassword.style.borderColor = 'var(--success)';
+
+                // Показываем уведомление
+                showPasswordResult('✅ Сгенерирован пароль: ' + data.password, 'success');
+
+                // Убираем подсветку через 3 секунды
+                setTimeout(() => {
+                    newPassword.style.borderColor = '';
+                    confirmPassword.style.borderColor = '';
+                }, 3000);
+            } else {
+                showPasswordResult('❌ ' + data.error, 'error');
+            }
+        } catch (error) {
+            showPasswordResult('❌ Ошибка генерации пароля: ' + error.message, 'error');
+        }
+    });
+}
+// ============================================
+// ОТОБРАЖЕНИЕ ЛОГИНА ПРЕПОДАВАТЕЛЯ
+// ============================================
+
+async function loadTeacherInfo() {
+    try {
+        const response = await fetch('/api/login');
+        const data = await response.json();
+        const loginElement = document.getElementById('teacherLogin');
+        if (loginElement) {
+            if (data.authenticated && data.username) {
+                loginElement.textContent = data.username;
+            } else {
+                loginElement.textContent = 'не авторизован';
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load teacher info:', error);
+        const loginElement = document.getElementById('teacherLogin');
+        if (loginElement) {
+            loginElement.textContent = 'ошибка загрузки';
+        }
+    }
+}
+
 /**
  * Показывает результат смены пароля
  */
@@ -1189,6 +1257,7 @@ function showPasswordResult(message, type) {
  */
 (async function init() {
     await loadCsrfToken();
+    await loadTeacherInfo();
     await Promise.all([
         loadFoldersForSelect(),
         loadFoldersList(),
